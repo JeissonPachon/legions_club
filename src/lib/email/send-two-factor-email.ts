@@ -4,7 +4,6 @@ import { env } from "@/lib/env";
 export async function sendTwoFactorEmail(to: string, code: string) {
   if (process.env.NODE_ENV === "development") {
     console.log(`[DEV] 2FA code for ${to}: ${code}`);
-    return;
   }
 
   if (!env.SMTP_HOST || env.SMTP_HOST.includes("example")) {

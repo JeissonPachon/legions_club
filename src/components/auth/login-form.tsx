@@ -130,7 +130,7 @@ export function LoginForm() {
       <div className="relative z-10 flex w-full max-w-md flex-col items-center space-y-8">
         {/* Centered Title */}
         <div className="flex flex-col items-center space-y-3 text-center">
-          <span className={`${sedgwick.className} text-5xl sm:text-6xl tracking-widest text-primary drop-shadow-[0_4px_12px_rgba(0,0,0,1)]`}>
+          <span className={`${sedgwick.className} text-5xl sm:text-6xl tracking-widest text-[var(--brand)] drop-shadow-[0_4px_12px_rgba(50,150,255,0.4)]`}>
             LEGIONS CLUB
           </span>
           <p className="text-sm font-medium text-zinc-300 drop-shadow-md">
@@ -140,9 +140,12 @@ export function LoginForm() {
         
         {/* Form Container */}
         <div className="w-full">
-          <Card className="w-full border-2 border-primary/20 bg-background/90 shadow-2xl backdrop-blur-md">
+          <Card className="w-full border border-[var(--brand)]/30 bg-zinc-950/80 shadow-[0_0_30px_rgba(50,150,255,0.1)] backdrop-blur-md relative overflow-hidden">
+            {/* Subtle top neon accent line */}
+            <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[var(--brand)] to-transparent opacity-80" />
+            
             <CardHeader className="space-y-1">
-              <CardTitle className="text-2xl">Iniciar sesion</CardTitle>
+              <CardTitle className="text-2xl font-bold tracking-tight uppercase">Iniciar sesion</CardTitle>
               <CardDescription className="opacity-90">
                 Ingresa tus credenciales. Se enviara un codigo de verificacion a tu correo.
               </CardDescription>
