@@ -1,0 +1,266 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TenantStatus {
+  active
+  suspended
+  archived
+}
+
+enum UserRole {
+  owner
+  manager
+  coach
+  athlete
+}
+
+enum ChallengePurpose {
+  login
+  privileged_action
+}
+
+enum SubscriptionStatus {
+  active
+  paused
+  canceled
+  expired
+}
+
+enum AttendanceEventType {
+  check_in
+  renewal
+  cancelation
+  adjustment
+}
+
+enum GymDiscipline {
+  gym
+  powerlifting
+  crossfit
+  pilates
+  hyrox
+  mma
+  other
+}
+
+model Tenant {
+  id            String               @id @default(uuid()) @db.Uuid
+  slug          String               @unique
+  legalName     String
+  displayName   String
+  discipline    GymDiscipline        @default(gym)
+  timezone      String               @default("UTC")
+  status        TenantStatus         @default(active)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  users         User[]
+  members       Member[]
+  plans         Plan[]
+  subscriptions Subscription[]
+  sessions      Session[]
+  twoFactor     TwoFactorChallenge[]
+  events        AttendanceEvent[]
+  audits        AuditLog[]
+  outbox        EmailOutbox[]
+
+  @@map("tenants")
+}
+
+model User {
+  id                   String               @id @default(uuid()) @db.Uuid
+  tenantId             String               @db.Uuid
+  tenant               Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role                 UserRole
+  fullName             String
+  email                String
+  passwordHash         String
+  isActive             Boolean              @default(true)
+  lastLoginAt          DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  sessions             Session[]
+  challenges           TwoFactorChallenge[]
+  subscriptionsCreated Subscription[]       @relation("subscriptionCreatedBy")
+  eventsPerformed      AttendanceEvent[]    @relation("eventPerformedBy")
+  audits               AuditLog[]           @relation("auditActor")
+
+  @@unique([tenantId, email])
+  @@index([tenantId, role, isActive])
+  @@map("users")
+}
+
+model Session {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @db.Uuid
+  userId           String    @db.Uuid
+  sessionTokenHash String
+  ipHash           String?
+  userAgent        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, sessionTokenHash])
+  @@index([tenantId, userId, expiresAt])
+  @@map("sessions")
+}
+
+model TwoFactorChallenge {
+  id           String           @id @default(uuid()) @db.Uuid
+  tenantId     String           @db.Uuid
+  userId       String           @db.Uuid
+  purpose      ChallengePurpose @default(login)
+  codeHash     String
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  attemptCount Int              @default(0)
+  createdAt    DateTime         @default(now())
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, expiresAt])
+  @@map("two_factor_challenges")
+}
+
+model Member {
+  id            String            @id @default(uuid()) @db.Uuid
+  tenantId      String            @db.Uuid
+  tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fullName      String
+  documentHash  String
+  documentLast4 String
+  emailHash     String?
+  phoneHash     String?
+  isActive      Boolean           @default(true)
+  deletedAt     DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  sensitive     MemberSensitive?
+  subscriptions Subscription[]
+  attendance    AttendanceEvent[]
+
+  @@unique([tenantId, documentHash])
+  @@index([tenantId, fullName])
+  @@index([tenantId, deletedAt])
+  @@map("members")
+}
+
+model MemberSensitive {
+  memberId             String   @id @db.Uuid
+  member               Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  injuriesEnc          String?
+  conditionsEnc        String?
+  emergencyNameEnc     String?
+  emergencyPhoneEnc    String?
+  emergencyRelationEnc String?
+  updatedAt            DateTime @updatedAt
+
+  @@map("member_sensitive")
+}
+
+model Plan {
+  id               String         @id @default(uuid()) @db.Uuid
+  tenantId         String         @db.Uuid
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name             String
+  sessionsPerMonth Int
+  durationDays     Int
+  priceCents       Int
+  currency         String         @default("USD")
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  subscriptions    Subscription[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, isActive])
+  @@map("plans")
+}
+
+model Subscription {
+  id                String             @id @default(uuid()) @db.Uuid
+  tenantId          String             @db.Uuid
+  memberId          String             @db.Uuid
+  planId            String             @db.Uuid
+  status            SubscriptionStatus @default(active)
+  sessionsAssigned  Int
+  sessionsRemaining Int
+  startDate         DateTime
+  endDate           DateTime
+  canceledAt        DateTime?
+  cancelReason      String?
+  createdByUserId   String             @db.Uuid
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  member            Member             @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  plan              Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+  createdByUser     User               @relation("subscriptionCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  events            AttendanceEvent[]
+
+  @@index([tenantId, memberId, status, endDate])
+  @@map("subscriptions")
+}
+
+model AttendanceEvent {
+  id                String              @id @default(uuid()) @db.Uuid
+  tenantId          String              @db.Uuid
+  memberId          String              @db.Uuid
+  subscriptionId    String              @db.Uuid
+  eventType         AttendanceEventType @default(check_in)
+  deltaSessions     Int
+  remainingBefore   Int
+  remainingAfter    Int
+  idempotencyKey    String
+  performedByUserId String              @db.Uuid
+  notes             String?
+  createdAt         DateTime            @default(now())
+  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  member            Member              @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  subscription      Subscription        @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  performedByUser   User                @relation("eventPerformedBy", fields: [performedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, memberId, createdAt])
+  @@map("attendance_events")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  actorUserId  String   @db.Uuid
+  action       String
+  entityType   String
+  entityId     String?
+  metadataJson Json?
+  createdAt    DateTime @default(now())
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor        User     @relation("auditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, createdAt])
+  @@map("audit_logs")
+}
+
+model EmailOutbox {
+  id                String    @id @default(uuid()) @db.Uuid
+  tenantId          String    @db.Uuid
+  toHash            String
+  template          String
+  payloadJson       Json?
+  providerMessageId String?
+  status            String    @default("queued")
+  error             String?
+  sentAt            DateTime?
+  createdAt         DateTime  @default(now())
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status, createdAt])
+  @@map("email_outbox")
+}

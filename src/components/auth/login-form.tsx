@@ -1,0 +1,240 @@
+"use client";
+
+import { useState } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sedgwick_Ave_Display } from "next/font/google";
+
+const sedgwick = Sedgwick_Ave_Display({
+  weight: "400",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+type LoginStep = "credentials" | "verify";
+
+type TenantOption = {
+  slug: string;
+  displayName: string;
+};
+
+export function LoginForm() {
+  const router = useRouter();
+  const [step, setStep] = useState<LoginStep>("credentials");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [challengeId, setChallengeId] = useState("");
+  const [code, setCode] = useState("");
+  const [devCode, setDevCode] = useState<string | undefined>();
+  const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
+  const [selectedTenantSlug, setSelectedTenantSlug] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleCredentials = async () => {
+    setError(null);
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+          tenantSlug: selectedTenantSlug || undefined,
+        }),
+      });
+
+      const payload = await response.json();
+      if (payload.requiresTenantSelection && Array.isArray(payload.tenants)) {
+        setTenantOptions(payload.tenants as TenantOption[]);
+        setSelectedTenantSlug((payload.tenants[0] as TenantOption | undefined)?.slug ?? "");
+        return;
+      }
+
+      if (response.status === 429) {
+        const retryAfter = Number(response.headers.get("Retry-After") ?? "0");
+        if (Number.isFinite(retryAfter) && retryAfter > 0) {
+          throw new Error(`Demasiados intentos. Intenta de nuevo en ${retryAfter} segundos.`);
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.message ?? "No fue posible iniciar sesion");
+      }
+
+      setTenantOptions([]);
+      setSelectedTenantSlug("");
+      setChallengeId(payload.challengeId);
+      setDevCode(payload.devCode);
+      setStep("verify");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Fallo el inicio de sesion";
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/2fa/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeId, code }),
+      });
+      const payload = await response.json();
+      if (response.status === 429) {
+        const retryAfter = Number(response.headers.get("Retry-After") ?? "0");
+        if (Number.isFinite(retryAfter) && retryAfter > 0) {
+          throw new Error(`Demasiados intentos de verificacion. Intenta de nuevo en ${retryAfter} segundos.`);
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.message ?? "Codigo de verificacion invalido");
+      }
+
+      router.push("/dashboard");
+      router.refresh();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Fallo la verificacion";
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <main className="relative flex min-h-screen flex-col items-center justify-center p-4 sm:p-8">
+      {/* Background Image full screen */}
+      <div className="absolute inset-0 z-0 bg-zinc-950">
+        <Image
+          src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470&auto=format&fit=crop"
+          alt="Gym background"
+          fill
+          priority
+          className="h-full w-full object-cover opacity-30 brightness-75 grayscale sepia-0 contrast-125"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/90 via-zinc-950/60 to-zinc-950/20 mix-blend-multiply" />
+      </div>
+      
+      <div className="relative z-10 flex w-full max-w-md flex-col items-center space-y-8">
+        {/* Centered Title */}
+        <div className="flex flex-col items-center space-y-3 text-center">
+          <span className={`${sedgwick.className} text-5xl sm:text-6xl tracking-widest text-primary drop-shadow-[0_4px_12px_rgba(0,0,0,1)]`}>
+            LEGIONS CLUB
+          </span>
+          <p className="text-sm font-medium text-zinc-300 drop-shadow-md">
+            El sudor es tu mejor accesorio. Entrena duro.
+          </p>
+        </div>
+        
+        {/* Form Container */}
+        <div className="w-full">
+          <Card className="w-full border-2 border-primary/20 bg-background/90 shadow-2xl backdrop-blur-md">
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-2xl">Iniciar sesion</CardTitle>
+              <CardDescription className="opacity-90">
+                Ingresa tus credenciales. Se enviara un codigo de verificacion a tu correo.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+          {step === "credentials" ? (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    if (tenantOptions.length > 0) {
+                      setTenantOptions([]);
+                      setSelectedTenantSlug("");
+                    }
+                  }}
+                  placeholder="owner@mygym.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Contrasena</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    if (tenantOptions.length > 0) {
+                      setTenantOptions([]);
+                      setSelectedTenantSlug("");
+                    }
+                  }}
+                  placeholder="••••••••"
+                />
+              </div>
+              {tenantOptions.length > 0 ? (
+                <div className="space-y-2">
+                  <Label htmlFor="tenant">Selecciona tu sede</Label>
+                  <Select value={selectedTenantSlug} onValueChange={setSelectedTenantSlug}>
+                    <SelectTrigger id="tenant">
+                      <SelectValue placeholder="Selecciona gimnasio" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tenantOptions.map((tenant) => (
+                        <SelectItem key={tenant.slug} value={tenant.slug}>
+                          {tenant.displayName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+              <Button className="w-full" disabled={isLoading} onClick={handleCredentials}>
+                {isLoading
+                  ? "Enviando codigo..."
+                  : tenantOptions.length > 0
+                    ? "Continuar con sede"
+                    : "Continuar"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="code">Codigo de verificacion</Label>
+                <Input
+                  id="code"
+                  value={code}
+                  onChange={(event) => setCode(event.target.value)}
+                  placeholder="123456"
+                  maxLength={6}
+                />
+              </div>
+              {devCode ? (
+                <p className="rounded-md border p-2 text-xs text-muted-foreground">
+                  Codigo de desarrollo: <span className="font-semibold text-foreground">{devCode}</span>
+                </p>
+              ) : null}
+              <Button className="w-full" disabled={isLoading} onClick={handleVerify}>
+                {isLoading ? "Verificando..." : "Verificar e ingresar"}
+              </Button>
+            </>
+          )}
+
+          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        </CardContent>
+      </Card>
+        </div>
+      </div>
+    </main>
+  );
+}
