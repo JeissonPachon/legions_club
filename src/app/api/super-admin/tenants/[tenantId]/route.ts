@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { setAuthCookie } from "@/lib/auth/cookies";
+import { signSessionJwt } from "@/lib/auth/session";
 import { requireSuperAdminApi } from "@/modules/super-admin/auth";
 
 const updateTenantSchema = z.object({
@@ -122,9 +124,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     return NextResponse.json({ message: "Payload invalido" }, { status: 400 });
   }
 
-  if (auth.tenantId === tenantId) {
-    return NextResponse.json({ message: "No puedes eliminar el gimnasio de tu propia sesion" }, { status: 409 });
-  }
+  const deletingCurrentTenant = auth.tenantId === tenantId;
 
   const existing = await db.tenant.findUnique({
     where: { id: tenantId },
@@ -143,8 +143,42 @@ export async function DELETE(request: Request, context: RouteContext) {
     );
   }
 
+  let replacementTenantId: string | null = null;
+
   try {
-    await db.tenant.delete({ where: { id: existing.id } });
+    await db.$transaction(async (tx) => {
+      if (deletingCurrentTenant) {
+        const fallbackTenant = await tx.tenant.upsert({
+          where: { slug: "platform-admin" },
+          update: { status: "active" },
+          create: {
+            slug: "platform-admin",
+            legalName: "Legions Platform",
+            displayName: "Legions Platform",
+            discipline: "other",
+            status: "active",
+          },
+          select: { id: true },
+        });
+
+        replacementTenantId = fallbackTenant.id;
+
+        await tx.user.update({
+          where: { id: auth.userId },
+          data: { tenantId: fallbackTenant.id },
+        });
+
+        await tx.session.updateMany({
+          where: {
+            userId: auth.userId,
+            tenantId: auth.tenantId,
+          },
+          data: { tenantId: fallbackTenant.id },
+        });
+      }
+
+      await tx.tenant.delete({ where: { id: existing.id } });
+    });
   } catch {
     return NextResponse.json(
       { message: "No fue posible eliminar el gimnasio. Intenta archivarlo y revisar dependencias." },
@@ -152,5 +186,25 @@ export async function DELETE(request: Request, context: RouteContext) {
     );
   }
 
-  return NextResponse.json({ ok: true, deletedTenantId: existing.id, deletedTenantName: existing.displayName });
+  const response = NextResponse.json({
+    ok: true,
+    deletedTenantId: existing.id,
+    deletedTenantName: existing.displayName,
+    requiresRelogin: false,
+  });
+
+  if (deletingCurrentTenant && replacementTenantId) {
+    const refreshedJwt = await signSessionJwt({
+      sub: auth.userId,
+      sid: auth.sessionId,
+      tenantId: replacementTenantId,
+      role: auth.role,
+      email: auth.email,
+      fullName: auth.fullName,
+    });
+
+    setAuthCookie(response, refreshedJwt);
+  }
+
+  return response;
 }

@@ -13,6 +13,17 @@ const loginSchema = z.object({
   tenantSlug: z.string().min(2).regex(/^[a-z0-9-]+$/).optional(),
 });
 
+function isSuperAdminEmail(email: string) {
+  if (!env.SUPER_ADMIN_EMAILS) {
+    return false;
+  }
+
+  return env.SUPER_ADMIN_EMAILS.split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter((value) => value.length > 0)
+    .includes(email.toLowerCase());
+}
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const parsed = loginSchema.safeParse(body);
@@ -55,13 +66,21 @@ export async function POST(request: Request) {
     where: {
       email: email.toLowerCase(),
       isActive: true,
-      tenant: { status: "active" },
     },
     include: { tenant: true },
   });
 
+  const isDevelopment = process.env.NODE_ENV === "development";
+
   if (users.length === 0) {
-    return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
+    return NextResponse.json(
+      {
+        message: isDevelopment
+          ? "No existe un usuario activo para este correo."
+          : "Invalid credentials",
+      },
+      { status: 401 },
+    );
   }
 
   if (users.length > 1 && !tenantSlug) {
@@ -80,18 +99,46 @@ export async function POST(request: Request) {
     : users[0];
 
   if (!user) {
-    return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
+    return NextResponse.json(
+      {
+        message: isDevelopment
+          ? "El tenant seleccionado no coincide con el usuario."
+          : "Invalid credentials",
+      },
+      { status: 401 },
+    );
   }
 
   const tenant = user.tenant;
+  const isSuperAdmin = isSuperAdminEmail(user.email);
 
   if (!user || !user.isActive) {
-    return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
+    return NextResponse.json(
+      {
+        message: isDevelopment ? "El usuario esta inactivo." : "Invalid credentials",
+      },
+      { status: 401 },
+    );
+  }
+
+  if (user.tenant.status !== "active" && !isSuperAdmin) {
+    return NextResponse.json(
+      {
+        message:
+          "Tu gimnasio esta suspendido o inactivo. Contacta al administrador para reactivarlo.",
+      },
+      { status: 403 },
+    );
   }
 
   const isPasswordValid = await verifyPassword(password, user.passwordHash);
   if (!isPasswordValid) {
-    return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
+    return NextResponse.json(
+      {
+        message: isDevelopment ? "Contrasena incorrecta." : "Invalid credentials",
+      },
+      { status: 401 },
+    );
   }
 
   const code = generateTwoFactorCode();

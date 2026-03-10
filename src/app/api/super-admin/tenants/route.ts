@@ -21,9 +21,15 @@ export async function GET(request: Request) {
   }
 
   const includeArchived = new URL(request.url).searchParams.get("includeArchived") === "true";
+  const baseWhere = { slug: { not: "platform-admin" } };
 
   const tenants = await db.tenant.findMany({
-    where: includeArchived ? undefined : { status: { in: ["active", "suspended"] } },
+    where: includeArchived
+      ? baseWhere
+      : {
+          ...baseWhere,
+          status: { in: ["active", "suspended"] },
+        },
     include: {
       _count: {
         select: {

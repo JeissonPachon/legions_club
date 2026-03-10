@@ -152,7 +152,12 @@ export function SuperAdminTenantForm() {
 
       return payload;
     },
-    onSuccess: async () => {
+    onSuccess: async (payload: { requiresRelogin?: boolean }) => {
+      if (payload.requiresRelogin) {
+        window.location.href = "/auth/login";
+        return;
+      }
+
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["super-admin-tenants"] }),
         queryClient.invalidateQueries({ queryKey: ["super-admin-overview"] }),

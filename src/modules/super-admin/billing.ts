@@ -40,6 +40,11 @@ export async function getSuperAdminBillingSummary(now: Date = new Date()): Promi
   const monthlyFeeCents = feeSnapshot.currentFeeCents;
 
   const tenants = await db.tenant.findMany({
+    where: {
+      slug: {
+        not: "platform-admin",
+      },
+    },
     orderBy: { createdAt: "desc" },
     include: {
       users: {

@@ -90,7 +90,10 @@ async function runAutomation({
   let tenantsSuspended = 0;
 
   const tenants = await db.tenant.findMany({
-    where: { status: { in: ["active", "suspended"] } },
+    where: {
+      status: { in: ["active", "suspended"] },
+      slug: { not: "platform-admin" },
+    },
     include: {
       users: {
         where: { role: "owner", isActive: true },

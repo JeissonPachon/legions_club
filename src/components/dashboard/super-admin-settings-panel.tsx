@@ -57,6 +57,9 @@ export function SuperAdminSettingsPanel() {
   const queryClient = useQueryClient();
   const [graceDaysDraft, setGraceDaysDraft] = useState<string | null>(null);
   const [globalReminderTemplateDraft, setGlobalReminderTemplateDraft] = useState<string | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const settingsQuery = useQuery({
     queryKey: ["super-admin-platform-settings"],
@@ -96,9 +99,41 @@ export function SuperAdminSettingsPanel() {
     },
   });
 
+  const changePassword = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/super-admin/settings/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+          confirmPassword,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.message ?? "No fue posible actualizar la contrasena");
+      }
+
+      return payload as { ok: true; message: string };
+    },
+    onSuccess: () => {
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    },
+  });
+
   const parsedGraceDays = Number(graceDays);
   const isGraceDaysValid = Number.isInteger(parsedGraceDays) && parsedGraceDays >= 1 && parsedGraceDays <= 45;
   const isTemplateValid = globalReminderTemplate.trim().length >= 4 && globalReminderTemplate.trim().length <= 280;
+  const isPasswordValid =
+    currentPassword.length >= 8 &&
+    newPassword.length >= 8 &&
+    confirmPassword.length >= 8 &&
+    newPassword === confirmPassword &&
+    currentPassword !== newPassword;
 
   return (
     <div className="space-y-4">
@@ -175,6 +210,65 @@ export function SuperAdminSettingsPanel() {
           <p>3. Comunicaciones: plantillas y reglas para recordatorios automaticos y manuales.</p>
           <p>4. Politica comercial: descuentos globales y por gimnasio con fechas de vigencia.</p>
           <p>5. Gobierno operativo: alta, suspension y reactivacion de gimnasios.</p>
+        </CardContent>
+      </Card>
+
+      <Card className="border-2">
+        <CardHeader>
+          <CardTitle>Seguridad de cuenta super admin</CardTitle>
+          <CardDescription>
+            Cambia tu contrasena para proteger el acceso administrativo de la plataforma.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="current-password">Contrasena actual</Label>
+              <Input
+                id="current-password"
+                type="password"
+                value={currentPassword}
+                onChange={(event) => setCurrentPassword(event.target.value)}
+                placeholder="********"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-password">Nueva contrasena</Label>
+              <Input
+                id="new-password"
+                type="password"
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                placeholder="Minimo 8 caracteres"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirmar nueva contrasena</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                placeholder="Repite la nueva contrasena"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={() => changePassword.mutate()} disabled={changePassword.isPending || !isPasswordValid}>
+              {changePassword.isPending ? "Actualizando..." : "Actualizar contrasena"}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Recomendacion: usa al menos 12 caracteres mezclando letras, numeros y simbolos.
+            </p>
+          </div>
+
+          {changePassword.isError ? (
+            <p className="text-sm text-destructive">{changePassword.error.message}</p>
+          ) : null}
+          {changePassword.isSuccess ? (
+            <p className="text-sm text-muted-foreground">{changePassword.data.message}</p>
+          ) : null}
         </CardContent>
       </Card>
 

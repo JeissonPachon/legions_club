@@ -12,12 +12,13 @@ export type SuperAdminOverviewPayload = {
 export async function getSuperAdminOverview(): Promise<SuperAdminOverviewPayload> {
   const monthStart = dayjs().startOf("month").toDate();
   const monthEnd = dayjs().endOf("month").toDate();
+  const tenantWhere = { slug: { not: "platform-admin" } };
 
   const [tenantsTotal, activeTenants, suspendedTenants, archivedTenants, monthlyPayments] = await Promise.all([
-    db.tenant.count(),
-    db.tenant.count({ where: { status: "active" } }),
-    db.tenant.count({ where: { status: "suspended" } }),
-    db.tenant.count({ where: { status: "archived" } }),
+    db.tenant.count({ where: tenantWhere }),
+    db.tenant.count({ where: { ...tenantWhere, status: "active" } }),
+    db.tenant.count({ where: { ...tenantWhere, status: "suspended" } }),
+    db.tenant.count({ where: { ...tenantWhere, status: "archived" } }),
     db.auditLog.findMany({
       where: {
         action: "saas_monthly_payment_registered",
