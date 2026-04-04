@@ -1,5 +1,12 @@
 import { db } from "@/lib/db";
-import { Prisma } from "@prisma/client";
+
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: JsonValue }
+  | JsonValue[];
 
 type WriteAuditLogInput = {
   tenantId: string;
@@ -7,7 +14,7 @@ type WriteAuditLogInput = {
   action: string;
   entityType: string;
   entityId?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, JsonValue>;
 };
 
 export async function writeAuditLog(input: WriteAuditLogInput) {
@@ -18,7 +25,7 @@ export async function writeAuditLog(input: WriteAuditLogInput) {
       action: input.action,
       entityType: input.entityType,
       entityId: input.entityId,
-      metadataJson: input.metadata as Prisma.InputJsonValue | undefined,
+      metadataJson: input.metadata,
     },
   });
 }

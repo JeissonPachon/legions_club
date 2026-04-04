@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireGymManagementApi } from "@/modules/gym/auth";
-import type { Prisma } from "@prisma/client";
 
 const createFinanceEntrySchema = z.object({
   entryType: z.enum(["income", "expense"]),
@@ -28,7 +27,7 @@ function toFinanceEntry(log: {
   id: string;
   action: string;
   actorUserId: string;
-  metadataJson: Prisma.JsonValue | null;
+  metadataJson: unknown;
   createdAt: Date;
 }): FinanceEntry | null {
   if (!log.metadataJson || typeof log.metadataJson !== "object" || Array.isArray(log.metadataJson)) {

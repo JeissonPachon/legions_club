@@ -1,6 +1,5 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { getAuthContext } from "@/lib/auth/server";
 import { db } from "@/lib/db";
@@ -105,7 +104,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "No active subscription with available sessions" }, { status: 400 });
   }
 
-  const result = await db.$transaction(async (tx: Prisma.TransactionClient) => {
+  const result = await db.$transaction(async (tx) => {
     const remainingBefore = subscription.sessionsRemaining;
     const remainingAfter = remainingBefore - 1;
 

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireGymManagementApi } from "@/modules/gym/auth";
-import type { Prisma } from "@prisma/client";
 
 const updateFinanceEntrySchema = z
   .object({
@@ -31,6 +30,9 @@ function asMutableMetadata(metadataJson: unknown): Record<string, unknown> {
 type RouteContext = {
   params: Promise<{ entryId: string }>;
 };
+
+type AuditLogUpdateData = Parameters<typeof db.auditLog.update>[0]["data"];
+type AuditLogMetadataJson = NonNullable<AuditLogUpdateData>["metadataJson"];
 
 export async function PATCH(request: Request, context: RouteContext) {
   const auth = await requireGymManagementApi({ forbiddenMessage: "Only staff can edit finance entries" });
@@ -87,7 +89,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     where: { id: current.id },
     data: {
       action: nextEntryType === "income" ? "finance_income" : "finance_expense",
-      metadataJson: metadata as Prisma.InputJsonValue,
+      metadataJson: metadata as AuditLogMetadataJson,
     },
   });
 

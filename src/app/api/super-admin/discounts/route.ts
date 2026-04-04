@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireSuperAdminApi } from "@/modules/super-admin/auth";
-import type { Prisma } from "@prisma/client";
 
 const createDiscountSchema = z.object({
   name: z.string().min(2).max(80),
@@ -33,7 +32,7 @@ type DiscountRow = {
 
 function toDiscount(log: {
   id: string;
-  metadataJson: Prisma.JsonValue | null;
+  metadataJson: unknown;
   createdAt: Date;
 }): Omit<DiscountRow, "tenantName"> | null {
   if (!log.metadataJson || typeof log.metadataJson !== "object" || Array.isArray(log.metadataJson)) {
