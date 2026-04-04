@@ -17,6 +17,22 @@ const createTenantSchema = z.object({
   adminPhone: z.string().min(7).regex(/^\+?[1-9]\d{6,14}$/),
 });
 
+type TenantListRow = {
+  id: string;
+  slug: string;
+  displayName: string;
+  legalName: string;
+  nit: string | null;
+  discipline: "gym" | "powerlifting" | "crossfit" | "pilates" | "hyrox" | "mma" | "other";
+  status: "active" | "suspended" | "archived";
+  createdAt: Date;
+  users: Array<{ email: string; phoneEnc: string }>;
+  _count: {
+    users: number;
+    members: number;
+  };
+};
+
 export async function GET(request: Request) {
   const auth = await requireSuperAdminApi("Only super admins can view tenants");
   if (auth instanceof Response) {
@@ -26,7 +42,7 @@ export async function GET(request: Request) {
   const includeArchived = new URL(request.url).searchParams.get("includeArchived") === "true";
   const baseWhere = { slug: { not: "platform-admin" } };
 
-  const tenants = await db.tenant.findMany({
+  const tenants: TenantListRow[] = await db.tenant.findMany({
     where: includeArchived
       ? baseWhere
       : {
@@ -54,7 +70,7 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.json({
-    tenants: tenants.map((tenant) => {
+    tenants: tenants.map((tenant: TenantListRow) => {
       const owner = tenant.users[0] ?? null;
       let ownerPhone: string | null = null;
 
