@@ -10,15 +10,40 @@ const globalForPrisma = globalThis as unknown as {
   pgPool?: Pool;
 };
 
+function normalizeCertificate(raw?: string): string | undefined {
+  if (!raw) return undefined;
+
+  const trimmed = raw.trim().replace(/^"|"$/g, "").replace(/^'|'$/g, "");
+  if (!trimmed) return undefined;
+
+  // Common Vercel format: single-line value with escaped newlines.
+  if (trimmed.includes("-----BEGIN CERTIFICATE-----")) {
+    return trimmed.replace(/\\n/g, "\n");
+  }
+
+  // Optional fallback: base64 encoded PEM content.
+  try {
+    const decoded = Buffer.from(trimmed, "base64").toString("utf8");
+    if (decoded.includes("-----BEGIN CERTIFICATE-----")) {
+      return decoded;
+    }
+  } catch {
+    // Ignore invalid base64 and keep undefined.
+  }
+
+  return undefined;
+}
+
 const rawUrl = env.DATABASE_URL;
 const connectionString = rawUrl?.replace(/[?&]sslmode=[^&]*/g, "").replace(/\?$/, "");
+const caCertificate = normalizeCertificate(process.env.SUPABASE_SSL_CERT);
 
 // En producción verifica el certificado, en desarrollo no
 const sslConfig =
   process.env.NODE_ENV === "production"
     ? {
         rejectUnauthorized: true,
-        ca: process.env.SUPABASE_SSL_CERT, // Certificado como variable de entorno
+        ca: caCertificate,
       }
     : { rejectUnauthorized: false };
 
