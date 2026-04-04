@@ -21,6 +21,16 @@ const createMemberSchema = z.object({
   emergencyRelation: z.string().optional(),
 });
 
+type MemberListRow = {
+  id: string;
+  fullName: string;
+  documentLast4: string;
+  emailHash: string | null;
+  phoneHash: string | null;
+  isActive: boolean;
+  createdAt: Date;
+};
+
 export async function GET(request: Request) {
   const auth = await requireGymManagementApi();
   if (auth instanceof Response) {
@@ -30,7 +40,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search")?.trim();
 
-  const members = await db.member.findMany({
+  const members: MemberListRow[] = await db.member.findMany({
     where: {
       tenantId: auth.tenantId,
       deletedAt: null,
