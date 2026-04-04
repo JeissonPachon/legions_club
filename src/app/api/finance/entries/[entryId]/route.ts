@@ -31,9 +31,6 @@ type RouteContext = {
   params: Promise<{ entryId: string }>;
 };
 
-type AuditLogUpdateData = Parameters<typeof db.auditLog.update>[0]["data"];
-type AuditLogMetadataJson = NonNullable<AuditLogUpdateData>["metadataJson"];
-
 export async function PATCH(request: Request, context: RouteContext) {
   const auth = await requireGymManagementApi({ forbiddenMessage: "Only staff can edit finance entries" });
   if (auth instanceof Response) {
@@ -89,7 +86,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     where: { id: current.id },
     data: {
       action: nextEntryType === "income" ? "finance_income" : "finance_expense",
-      metadataJson: metadata as AuditLogMetadataJson,
+      metadataJson: metadata as any,
     },
   });
 

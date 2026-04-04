@@ -1,10 +1,18 @@
-import { PrismaClient } from "@prisma/client";
+import * as PrismaClientPackage from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { env } from "@/lib/env";
 
+const PrismaClientCtor = (PrismaClientPackage as { PrismaClient?: new (args?: unknown) => unknown }).PrismaClient;
+
+if (!PrismaClientCtor) {
+  throw new Error("PrismaClient is not available from @prisma/client. Ensure prisma generate runs during build.");
+}
+
+const SafePrismaClientCtor: new (args?: unknown) => unknown = PrismaClientCtor;
+
 const globalForPrisma = globalThis as unknown as {
-  prisma?: PrismaClient;
+  prisma?: any;
   pgPool?: Pool;
 };
 
@@ -29,15 +37,19 @@ const pgPool =
 
 const adapter = new PrismaPg(pgPool);
 
-export const db =
-  globalForPrisma.prisma ??
-  new PrismaClient({
+function createPrismaClient(): any {
+  return new SafePrismaClientCtor({
     adapter,
     log:
       process.env.NODE_ENV === "development"
         ? ["query", "warn", "error"]
         : ["error"],
   });
+}
+
+export const db: any =
+  globalForPrisma.prisma ??
+  createPrismaClient();
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = db;

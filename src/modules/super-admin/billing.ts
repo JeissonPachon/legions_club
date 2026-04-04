@@ -35,11 +35,24 @@ export type SuperAdminBillingSummaryPayload = {
   tenants: SuperAdminBillingTenantRow[];
 };
 
+type BillingTenantQueryRow = {
+  id: string;
+  displayName: string;
+  slug: string;
+  status: "active" | "suspended" | "archived";
+  createdAt: Date;
+  users: Array<{
+    id: string;
+    fullName: string;
+    email: string;
+  }>;
+};
+
 export async function getSuperAdminBillingSummary(now: Date = new Date()): Promise<SuperAdminBillingSummaryPayload> {
   const feeSnapshot = await getSaasMonthlyFeeSnapshot(now);
   const monthlyFeeCents = feeSnapshot.currentFeeCents;
 
-  const tenants = await db.tenant.findMany({
+  const tenants: BillingTenantQueryRow[] = await db.tenant.findMany({
     where: {
       slug: {
         not: "platform-admin",
@@ -64,7 +77,7 @@ export async function getSuperAdminBillingSummary(now: Date = new Date()): Promi
   });
 
   const tenantRows = await Promise.all(
-    tenants.map(async (tenant) => {
+    tenants.map(async (tenant: BillingTenantQueryRow) => {
       const dates = getTenantBillingDates(tenant.createdAt, now);
 
       const paidThisCycle = dates.currentDueAt
