@@ -37,15 +37,29 @@ function normalizeCertificate(raw?: string): string | undefined {
 const rawUrl = env.DATABASE_URL;
 const connectionString = rawUrl?.replace(/[?&]sslmode=[^&]*/g, "").replace(/\?$/, "");
 const caCertificate = normalizeCertificate(process.env.SUPABASE_SSL_CERT);
+const forceStrictTls = process.env.DB_FORCE_STRICT_TLS === "true";
 
-// En producción verifica el certificado, en desarrollo no
+// In production use strict TLS when CA is configured; otherwise fall back to
+// non-strict mode to avoid auth outages caused by certificate-chain issues.
 const sslConfig =
   process.env.NODE_ENV === "production"
-    ? {
-        rejectUnauthorized: true,
-        ca: caCertificate,
-      }
+    ? caCertificate
+      ? {
+          rejectUnauthorized: true,
+          ca: caCertificate,
+        }
+      : forceStrictTls
+        ? {
+            rejectUnauthorized: true,
+          }
+        : {
+            rejectUnauthorized: false,
+          }
     : { rejectUnauthorized: false };
+
+if (process.env.NODE_ENV === "production" && !caCertificate && !forceStrictTls) {
+  console.warn("SUPABASE_SSL_CERT is missing or invalid; using rejectUnauthorized=false fallback.");
+}
 
 const pgPool =
   globalForPrisma.pgPool ??

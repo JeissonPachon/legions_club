@@ -40,6 +40,25 @@ function isSuperAdminEmail(email: string) {
     .includes(email.toLowerCase());
 }
 
+function resolveLoginServerErrorMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error ?? "");
+  const message = raw.toLowerCase();
+
+  if (message.includes("self-signed") || message.includes("tls") || message.includes("certificate")) {
+    return "Database TLS configuration error. Check SUPABASE_SSL_CERT and DATABASE_URL.";
+  }
+
+  if (message.includes("p1001") || message.includes("can't reach database") || message.includes("connect")) {
+    return "Database connection error. Verify DATABASE_URL and network access.";
+  }
+
+  if (message.includes("prisma client")) {
+    return "Prisma client is not ready. Ensure prisma generate runs during build.";
+  }
+
+  return "Error inesperado en el servidor";
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => null);
@@ -201,6 +220,6 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     console.error("/api/auth/login error:", err);
-    return NextResponse.json({ message: "Error inesperado en el servidor" }, { status: 500 });
+    return NextResponse.json({ message: resolveLoginServerErrorMessage(err) }, { status: 500 });
   }
 }
