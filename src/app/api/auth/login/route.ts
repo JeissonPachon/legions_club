@@ -13,6 +13,22 @@ const loginSchema = z.object({
   tenantSlug: z.string().min(2).regex(/^[a-z0-9-]+$/).optional(),
 });
 
+type LoginTenant = {
+  id: string;
+  slug: string;
+  displayName: string;
+  status: "active" | "suspended" | "archived";
+};
+
+type LoginUser = {
+  id: string;
+  email: string;
+  passwordHash: string;
+  tenantId: string;
+  isActive: boolean;
+  tenant: LoginTenant;
+};
+
 function isSuperAdminEmail(email: string) {
   if (!env.SUPER_ADMIN_EMAILS) {
     return false;
@@ -63,7 +79,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const users = await db.user.findMany({
+    const users: LoginUser[] = await db.user.findMany({
       where: {
         email: email.toLowerCase(),
         isActive: true,
