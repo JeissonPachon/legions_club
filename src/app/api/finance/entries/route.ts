@@ -23,6 +23,14 @@ type FinanceEntry = {
   actorUserId: string;
 };
 
+type FinanceAuditLogRow = {
+  id: string;
+  action: string;
+  actorUserId: string;
+  metadataJson: unknown;
+  createdAt: Date;
+};
+
 function toFinanceEntry(log: {
   id: string;
   action: string;
@@ -63,16 +71,22 @@ export async function GET() {
     return auth;
   }
 
-  const logs = await db.auditLog.findMany({
+  const logs = (await db.auditLog.findMany({
     where: {
       tenantId: auth.tenantId,
       action: { in: ["finance_income", "finance_expense"] },
     },
     orderBy: { createdAt: "desc" },
     take: 200,
-  });
+  })) as FinanceAuditLogRow[];
 
-  const entries = logs.map(toFinanceEntry).filter((entry): entry is FinanceEntry => entry !== null);
+  const entries: FinanceEntry[] = [];
+  for (const log of logs) {
+    const entry = toFinanceEntry(log);
+    if (entry) {
+      entries.push(entry);
+    }
+  }
 
   const monthStart = dayjs().startOf("month");
   const monthEntries = entries.filter((entry) => dayjs(entry.occurredAt).isAfter(monthStart.subtract(1, "millisecond")));
