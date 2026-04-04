@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
+const bcrypt = require('bcryptjs');
 
 function loadEnvFile(envPath) {
   const content = fs.readFileSync(envPath, 'utf8');
@@ -29,9 +30,21 @@ async function main() {
     process.exit(1);
   }
 
-  // EDIT THESE VALUES as needed
-  const targetEmail = 'legionsclubtech@gmail.com';
-  const newHash = '$2b$12$mpu5yReBV/MEQigrz0QGyOztKheCjb3gLKWRmxz12rTi8wl0lZhLq';
+  const targetEmail = (process.argv[2] || '').trim().toLowerCase();
+  const newPassword = process.argv[3] || '';
+  const bcryptRounds = Number(env.AUTH_BCRYPT_ROUNDS || '12');
+
+  if (!targetEmail || !newPassword) {
+    console.error('Usage: node scripts/reset-super-admin-password.js <email> <newPassword>');
+    process.exit(1);
+  }
+
+  if (newPassword.length < 8) {
+    console.error('newPassword must have at least 8 characters');
+    process.exit(1);
+  }
+
+  const newHash = await bcrypt.hash(newPassword, bcryptRounds);
 
   const pool = new Pool({ connectionString: databaseUrl });
   try {
@@ -43,7 +56,6 @@ async function main() {
     console.log('Rows updated:', res.rowCount);
     if (res.rowCount > 0) {
       console.log('Password updated for', targetEmail);
-      console.log('Temporary password (store it safely): Lg-COmXe8NF');
     } else {
       console.log('No user found with that email');
     }
