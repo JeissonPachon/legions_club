@@ -104,16 +104,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "No active subscription with available sessions" }, { status: 400 });
   }
 
-  const result = await db.$transaction(async (tx) => {
-    const remainingBefore = subscription.sessionsRemaining;
-    const remainingAfter = remainingBefore - 1;
+  const remainingBefore = subscription.sessionsRemaining;
+  const remainingAfter = remainingBefore - 1;
 
-    const updatedSubscription = await tx.subscription.update({
+  const [updatedSubscription, event] = await db.$transaction([
+    db.subscription.update({
       where: { id: subscription.id },
       data: { sessionsRemaining: remainingAfter },
-    });
-
-    const event = await tx.attendanceEvent.create({
+    }),
+    db.attendanceEvent.create({
       data: {
         tenantId: auth.tenantId,
         memberId: subscription.memberId,
@@ -126,10 +125,10 @@ export async function POST(request: Request) {
         performedByUserId: auth.userId,
         notes: parsed.data.notes,
       },
-    });
+    }),
+  ]);
 
-    return { updatedSubscription, event };
-  });
+  const result = { updatedSubscription, event };
 
   return NextResponse.json({ ok: true, ...result }, { status: 201 });
 }
