@@ -54,7 +54,18 @@ export async function POST(request: Request) {
 
   const challenge = await db.twoFactorChallenge.findUnique({
     where: { id: parsed.data.challengeId },
-    include: { user: true },
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          fullName: true,
+          isActive: true,
+          tenantId: true,
+        },
+      },
+    },
   });
 
   if (!challenge || challenge.purpose !== "login") {

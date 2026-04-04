@@ -2,28 +2,59 @@
 CREATE SCHEMA IF NOT EXISTS "public";
 
 -- CreateEnum
-CREATE TYPE "TenantStatus" AS ENUM ('active', 'suspended', 'archived');
+DO $$
+BEGIN
+    IF to_regtype('public."TenantStatus"') IS NULL AND to_regtype('app."TenantStatus"') IS NULL THEN
+        CREATE TYPE "TenantStatus" AS ENUM ('active', 'suspended', 'archived');
+    END IF;
+END$$;
 
 -- CreateEnum
-CREATE TYPE "UserRole" AS ENUM ('owner', 'manager', 'coach', 'athlete');
+DO $$
+BEGIN
+    IF to_regtype('public."UserRole"') IS NULL AND to_regtype('app."UserRole"') IS NULL THEN
+        CREATE TYPE "UserRole" AS ENUM ('owner', 'manager', 'coach', 'athlete');
+    END IF;
+END$$;
 
 -- CreateEnum
-CREATE TYPE "ChallengePurpose" AS ENUM ('login', 'privileged_action');
+DO $$
+BEGIN
+    IF to_regtype('public."ChallengePurpose"') IS NULL AND to_regtype('app."ChallengePurpose"') IS NULL THEN
+        CREATE TYPE "ChallengePurpose" AS ENUM ('login', 'privileged_action');
+    END IF;
+END$$;
 
 -- CreateEnum
-CREATE TYPE "SubscriptionStatus" AS ENUM ('active', 'paused', 'canceled', 'expired');
+DO $$
+BEGIN
+    IF to_regtype('public."SubscriptionStatus"') IS NULL AND to_regtype('app."SubscriptionStatus"') IS NULL THEN
+        CREATE TYPE "SubscriptionStatus" AS ENUM ('active', 'paused', 'canceled', 'expired');
+    END IF;
+END$$;
 
 -- CreateEnum
-CREATE TYPE "AttendanceEventType" AS ENUM ('check_in', 'renewal', 'cancelation', 'adjustment');
+DO $$
+BEGIN
+    IF to_regtype('public."AttendanceEventType"') IS NULL AND to_regtype('app."AttendanceEventType"') IS NULL THEN
+        CREATE TYPE "AttendanceEventType" AS ENUM ('check_in', 'renewal', 'cancelation', 'adjustment');
+    END IF;
+END$$;
 
 -- CreateEnum
-CREATE TYPE "GymDiscipline" AS ENUM ('gym', 'powerlifting', 'crossfit', 'pilates', 'hyrox', 'mma', 'other');
+DO $$
+BEGIN
+    IF to_regtype('public."GymDiscipline"') IS NULL AND to_regtype('app."GymDiscipline"') IS NULL THEN
+        CREATE TYPE "GymDiscipline" AS ENUM ('gym', 'powerlifting', 'crossfit', 'pilates', 'hyrox', 'mma', 'other');
+    END IF;
+END$$;
 
 -- CreateTable
-CREATE TABLE "tenants" (
+CREATE TABLE IF NOT EXISTS "tenants" (
     "id" UUID NOT NULL,
     "slug" TEXT NOT NULL,
     "legalName" TEXT NOT NULL,
+    "nit" TEXT,
     "displayName" TEXT NOT NULL,
     "discipline" "GymDiscipline" NOT NULL DEFAULT 'gym',
     "timezone" TEXT NOT NULL DEFAULT 'UTC',
@@ -35,7 +66,7 @@ CREATE TABLE "tenants" (
 );
 
 -- CreateTable
-CREATE TABLE "users" (
+CREATE TABLE IF NOT EXISTS "users" (
     "id" UUID NOT NULL,
     "tenantId" UUID NOT NULL,
     "role" "UserRole" NOT NULL,
@@ -51,7 +82,7 @@ CREATE TABLE "users" (
 );
 
 -- CreateTable
-CREATE TABLE "sessions" (
+CREATE TABLE IF NOT EXISTS "sessions" (
     "id" UUID NOT NULL,
     "tenantId" UUID NOT NULL,
     "userId" UUID NOT NULL,
@@ -66,7 +97,7 @@ CREATE TABLE "sessions" (
 );
 
 -- CreateTable
-CREATE TABLE "two_factor_challenges" (
+CREATE TABLE IF NOT EXISTS "two_factor_challenges" (
     "id" UUID NOT NULL,
     "tenantId" UUID NOT NULL,
     "userId" UUID NOT NULL,
@@ -81,7 +112,7 @@ CREATE TABLE "two_factor_challenges" (
 );
 
 -- CreateTable
-CREATE TABLE "members" (
+CREATE TABLE IF NOT EXISTS "members" (
     "id" UUID NOT NULL,
     "tenantId" UUID NOT NULL,
     "fullName" TEXT NOT NULL,
@@ -98,7 +129,7 @@ CREATE TABLE "members" (
 );
 
 -- CreateTable
-CREATE TABLE "member_sensitive" (
+CREATE TABLE IF NOT EXISTS "member_sensitive" (
     "memberId" UUID NOT NULL,
     "injuriesEnc" TEXT,
     "conditionsEnc" TEXT,
@@ -111,7 +142,7 @@ CREATE TABLE "member_sensitive" (
 );
 
 -- CreateTable
-CREATE TABLE "plans" (
+CREATE TABLE IF NOT EXISTS "plans" (
     "id" UUID NOT NULL,
     "tenantId" UUID NOT NULL,
     "name" TEXT NOT NULL,
@@ -127,7 +158,7 @@ CREATE TABLE "plans" (
 );
 
 -- CreateTable
-CREATE TABLE "subscriptions" (
+CREATE TABLE IF NOT EXISTS "subscriptions" (
     "id" UUID NOT NULL,
     "tenantId" UUID NOT NULL,
     "memberId" UUID NOT NULL,
@@ -147,7 +178,7 @@ CREATE TABLE "subscriptions" (
 );
 
 -- CreateTable
-CREATE TABLE "attendance_events" (
+CREATE TABLE IF NOT EXISTS "attendance_events" (
     "id" UUID NOT NULL,
     "tenantId" UUID NOT NULL,
     "memberId" UUID NOT NULL,
@@ -165,7 +196,7 @@ CREATE TABLE "attendance_events" (
 );
 
 -- CreateTable
-CREATE TABLE "audit_logs" (
+CREATE TABLE IF NOT EXISTS "audit_logs" (
     "id" UUID NOT NULL,
     "tenantId" UUID NOT NULL,
     "actorUserId" UUID NOT NULL,
@@ -179,7 +210,7 @@ CREATE TABLE "audit_logs" (
 );
 
 -- CreateTable
-CREATE TABLE "email_outbox" (
+CREATE TABLE IF NOT EXISTS "email_outbox" (
     "id" UUID NOT NULL,
     "tenantId" UUID NOT NULL,
     "toHash" TEXT NOT NULL,
@@ -195,106 +226,272 @@ CREATE TABLE "email_outbox" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tenants_slug_key" ON "tenants"("slug");
+CREATE UNIQUE INDEX IF NOT EXISTS "tenants_slug_key" ON "tenants"("slug");
 
 -- CreateIndex
-CREATE INDEX "users_tenantId_role_isActive_idx" ON "users"("tenantId", "role", "isActive");
+CREATE INDEX IF NOT EXISTS "users_tenantId_role_isActive_idx" ON "users"("tenantId", "role", "isActive");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "users_tenantId_email_key" ON "users"("tenantId", "email");
+CREATE UNIQUE INDEX IF NOT EXISTS "users_tenantId_email_key" ON "users"("tenantId", "email");
 
 -- CreateIndex
-CREATE INDEX "sessions_tenantId_userId_expiresAt_idx" ON "sessions"("tenantId", "userId", "expiresAt");
+CREATE INDEX IF NOT EXISTS "sessions_tenantId_userId_expiresAt_idx" ON "sessions"("tenantId", "userId", "expiresAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "sessions_tenantId_sessionTokenHash_key" ON "sessions"("tenantId", "sessionTokenHash");
+CREATE UNIQUE INDEX IF NOT EXISTS "sessions_tenantId_sessionTokenHash_key" ON "sessions"("tenantId", "sessionTokenHash");
 
 -- CreateIndex
-CREATE INDEX "two_factor_challenges_tenantId_userId_expiresAt_idx" ON "two_factor_challenges"("tenantId", "userId", "expiresAt");
+CREATE INDEX IF NOT EXISTS "two_factor_challenges_tenantId_userId_expiresAt_idx" ON "two_factor_challenges"("tenantId", "userId", "expiresAt");
 
 -- CreateIndex
-CREATE INDEX "members_tenantId_fullName_idx" ON "members"("tenantId", "fullName");
+CREATE INDEX IF NOT EXISTS "members_tenantId_fullName_idx" ON "members"("tenantId", "fullName");
 
 -- CreateIndex
-CREATE INDEX "members_tenantId_deletedAt_idx" ON "members"("tenantId", "deletedAt");
+CREATE INDEX IF NOT EXISTS "members_tenantId_deletedAt_idx" ON "members"("tenantId", "deletedAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "members_tenantId_documentHash_key" ON "members"("tenantId", "documentHash");
+CREATE UNIQUE INDEX IF NOT EXISTS "members_tenantId_documentHash_key" ON "members"("tenantId", "documentHash");
 
 -- CreateIndex
-CREATE INDEX "plans_tenantId_isActive_idx" ON "plans"("tenantId", "isActive");
+CREATE INDEX IF NOT EXISTS "plans_tenantId_isActive_idx" ON "plans"("tenantId", "isActive");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "plans_tenantId_name_key" ON "plans"("tenantId", "name");
+CREATE UNIQUE INDEX IF NOT EXISTS "plans_tenantId_name_key" ON "plans"("tenantId", "name");
 
 -- CreateIndex
-CREATE INDEX "subscriptions_tenantId_memberId_status_endDate_idx" ON "subscriptions"("tenantId", "memberId", "status", "endDate");
+CREATE INDEX IF NOT EXISTS "subscriptions_tenantId_memberId_status_endDate_idx" ON "subscriptions"("tenantId", "memberId", "status", "endDate");
 
 -- CreateIndex
-CREATE INDEX "attendance_events_tenantId_memberId_createdAt_idx" ON "attendance_events"("tenantId", "memberId", "createdAt");
+CREATE INDEX IF NOT EXISTS "attendance_events_tenantId_memberId_createdAt_idx" ON "attendance_events"("tenantId", "memberId", "createdAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "attendance_events_tenantId_idempotencyKey_key" ON "attendance_events"("tenantId", "idempotencyKey");
+CREATE UNIQUE INDEX IF NOT EXISTS "attendance_events_tenantId_idempotencyKey_key" ON "attendance_events"("tenantId", "idempotencyKey");
 
 -- CreateIndex
-CREATE INDEX "audit_logs_tenantId_createdAt_idx" ON "audit_logs"("tenantId", "createdAt");
+CREATE INDEX IF NOT EXISTS "audit_logs_tenantId_createdAt_idx" ON "audit_logs"("tenantId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "email_outbox_tenantId_status_createdAt_idx" ON "email_outbox"("tenantId", "status", "createdAt");
+CREATE INDEX IF NOT EXISTS "email_outbox_tenantId_status_createdAt_idx" ON "email_outbox"("tenantId", "status", "createdAt");
 
 -- AddForeignKey
-ALTER TABLE "users" ADD CONSTRAINT "users_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_tenantId_fkey') THEN
+        ALTER TABLE "users" ADD CONSTRAINT "users_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "sessions" ADD CONSTRAINT "sessions_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sessions_tenantId_fkey') THEN
+        ALTER TABLE "sessions" ADD CONSTRAINT "sessions_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "sessions" ADD CONSTRAINT "sessions_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sessions_userId_fkey') THEN
+        ALTER TABLE "sessions" ADD CONSTRAINT "sessions_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "two_factor_challenges" ADD CONSTRAINT "two_factor_challenges_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'two_factor_challenges_tenantId_fkey') THEN
+        ALTER TABLE "two_factor_challenges" ADD CONSTRAINT "two_factor_challenges_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "two_factor_challenges" ADD CONSTRAINT "two_factor_challenges_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'two_factor_challenges_userId_fkey') THEN
+        ALTER TABLE "two_factor_challenges" ADD CONSTRAINT "two_factor_challenges_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "members" ADD CONSTRAINT "members_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'members_tenantId_fkey') THEN
+        ALTER TABLE "members" ADD CONSTRAINT "members_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "member_sensitive" ADD CONSTRAINT "member_sensitive_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "members"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'member_sensitive_memberId_fkey') THEN
+        ALTER TABLE "member_sensitive" ADD CONSTRAINT "member_sensitive_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "members"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "plans" ADD CONSTRAINT "plans_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'plans_tenantId_fkey') THEN
+        ALTER TABLE "plans" ADD CONSTRAINT "plans_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'subscriptions_tenantId_fkey') THEN
+        ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "members"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'subscriptions_memberId_fkey') THEN
+        ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "members"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_planId_fkey" FOREIGN KEY ("planId") REFERENCES "plans"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'subscriptions_planId_fkey') THEN
+        ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_planId_fkey" FOREIGN KEY ("planId") REFERENCES "plans"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_createdByUserId_fkey" FOREIGN KEY ("createdByUserId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'subscriptions_createdByUserId_fkey') THEN
+        ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_createdByUserId_fkey" FOREIGN KEY ("createdByUserId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "attendance_events" ADD CONSTRAINT "attendance_events_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'attendance_events_tenantId_fkey') THEN
+        ALTER TABLE "attendance_events" ADD CONSTRAINT "attendance_events_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "attendance_events" ADD CONSTRAINT "attendance_events_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "members"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'attendance_events_memberId_fkey') THEN
+        ALTER TABLE "attendance_events" ADD CONSTRAINT "attendance_events_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "members"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "attendance_events" ADD CONSTRAINT "attendance_events_subscriptionId_fkey" FOREIGN KEY ("subscriptionId") REFERENCES "subscriptions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'attendance_events_subscriptionId_fkey') THEN
+        ALTER TABLE "attendance_events" ADD CONSTRAINT "attendance_events_subscriptionId_fkey" FOREIGN KEY ("subscriptionId") REFERENCES "subscriptions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "attendance_events" ADD CONSTRAINT "attendance_events_performedByUserId_fkey" FOREIGN KEY ("performedByUserId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'attendance_events_performedByUserId_fkey') THEN
+        ALTER TABLE "attendance_events" ADD CONSTRAINT "attendance_events_performedByUserId_fkey" FOREIGN KEY ("performedByUserId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'audit_logs_tenantId_fkey') THEN
+        ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_actorUserId_fkey" FOREIGN KEY ("actorUserId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'audit_logs_actorUserId_fkey') THEN
+        ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_actorUserId_fkey" FOREIGN KEY ("actorUserId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+    END IF;
+END$$;
 
 -- AddForeignKey
-ALTER TABLE "email_outbox" ADD CONSTRAINT "email_outbox_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'email_outbox_tenantId_fkey') THEN
+        ALTER TABLE "email_outbox" ADD CONSTRAINT "email_outbox_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END$$;
+
+-- -----------------------------
+-- Anthropometrics table (idempotent, safe for Supabase SQL editor)
+-- -----------------------------
+
+-- Ensure UUID helpers exist
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Create anthropometrics table if missing
+CREATE TABLE IF NOT EXISTS "anthropometrics" (
+        "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        "tenant_id" UUID NOT NULL,
+        "member_id" UUID NOT NULL,
+        "measured_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+        "weight_kg" DOUBLE PRECISION,
+        "height_cm" DOUBLE PRECISION,
+        "body_fat_percent" DOUBLE PRECISION,
+        "cintura_cm" DOUBLE PRECISION,
+        "cadera_cm" DOUBLE PRECISION,
+        "pecho_cm" DOUBLE PRECISION,
+        "brazo_derecho_cm" DOUBLE PRECISION,
+        "brazo_izquierdo_cm" DOUBLE PRECISION,
+        "antebrazo_derecho_cm" DOUBLE PRECISION,
+        "antebrazo_izquierdo_cm" DOUBLE PRECISION,
+        "pierna_derecha_cm" DOUBLE PRECISION,
+        "pierna_izquierda_cm" DOUBLE PRECISION,
+        "pantorrilla_derecha_cm" DOUBLE PRECISION,
+        "pantorrilla_izquierda_cm" DOUBLE PRECISION,
+        "notas" TEXT,
+        "fotos_json" JSONB,
+        "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+        "updated_at" TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+-- Add foreign keys if referenced tables exist (safe to run repeatedly)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'tenants' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'anthropometrics_tenant_fk') THEN
+            ALTER TABLE "anthropometrics" ADD CONSTRAINT anthropometrics_tenant_fk FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE CASCADE;
+        END IF;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'members' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'anthropometrics_member_fk') THEN
+            ALTER TABLE "anthropometrics" ADD CONSTRAINT anthropometrics_member_fk FOREIGN KEY ("member_id") REFERENCES "members"("id") ON DELETE CASCADE;
+        END IF;
+    END IF;
+END$$;
+
+-- Index for typical queries
+CREATE INDEX IF NOT EXISTS idx_anthropometrics_tenant_member_measuredat ON "anthropometrics" ("tenant_id", "member_id", "measured_at" DESC);
+
+-- Trigger to keep updated_at current
+CREATE OR REPLACE FUNCTION trigger_set_timestamp_anthropometrics()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS set_timestamp_anthropometrics ON "anthropometrics";
+CREATE TRIGGER set_timestamp_anthropometrics
+BEFORE UPDATE ON "anthropometrics"
+FOR EACH ROW
+EXECUTE FUNCTION trigger_set_timestamp_anthropometrics();
+
+-- Quick check: list anthropometrics table (optional)
+-- SELECT table_schema, table_name FROM information_schema.tables WHERE table_name = 'anthropometrics';
+

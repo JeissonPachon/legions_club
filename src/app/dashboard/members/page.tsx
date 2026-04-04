@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -357,9 +358,14 @@ export default function MembersPage() {
                 <span className="text-xs text-muted-foreground">{member.isActive ? "Activo" : "Inactivo"}</span>
               </div>
 
-              <Button variant="outline" onClick={() => startEdit(member.id)}>
-                Editar miembro
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => startEdit(member.id)}>
+                  Editar miembro
+                </Button>
+                <Link href={`/dashboard/members/${member.id}`}>
+                  <Button variant="ghost">Ver medidas</Button>
+                </Link>
+              </div>
 
               {editingMemberId === member.id ? (
                 <div className="grid gap-2 sm:grid-cols-3">

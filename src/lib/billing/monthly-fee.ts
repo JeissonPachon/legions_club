@@ -36,18 +36,26 @@ function parseFeeUpdate(update: FeeUpdateRow) {
 }
 
 export async function getSaasMonthlyFeeSnapshot(atDate: Date = new Date()): Promise<SazasFeeSnapshot> {
-  const feeUpdates = await db.auditLog.findMany({
-    where: {
-      action: "saas_billing_fee_updated",
-      entityType: "billing_config",
-    },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-    select: {
-      metadataJson: true,
-      createdAt: true,
-    },
-  });
+  let feeUpdates: FeeUpdateRow[] = [];
+  try {
+    feeUpdates = await db.auditLog.findMany({
+      where: {
+        action: "saas_billing_fee_updated",
+        entityType: "billing_config",
+      },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      select: {
+        metadataJson: true,
+        createdAt: true,
+      },
+    });
+  } catch (err) {
+    // If DB is temporarily unreachable (TLS / network), log and return defaults below.
+    // Avoid crashing the whole app during dev; return fallback snapshot using env defaults.
+    console.warn("getSaasMonthlyFeeSnapshot: failed to read audit logs:", err);
+    feeUpdates = [];
+  }
 
   let currentFeeCents = env.SAAS_MONTHLY_FEE_CENTS;
   let currentEffectiveFrom: string | null = null;

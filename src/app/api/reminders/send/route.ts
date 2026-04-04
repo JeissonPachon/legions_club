@@ -1,135 +1,179 @@
-import nodemailer from "nodemailer";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
-import { forbiddenResponse } from "@/lib/http/responses";
-import { requireGymManagementApi } from "@/modules/gym/auth";
+import { requireSuperAdminApi } from "@/modules/super-admin/auth";
+import { decryptSensitiveValue, hashPII } from "@/lib/security/crypto";
+import { processWhatsappQueue } from "@/lib/notifications/whatsapp";
 
-const reminderSchema = z.object({
-  message: z.string().min(4).max(280),
-  channel: z.enum(["email", "whatsapp", "both"]),
+const sendSchema = z.object({
+  message: z.string().min(4),
+  channel: z.enum(["email", "whatsapp", "both"]).default("both"),
   scope: z.enum(["current_tenant", "all_active_tenants"]).default("current_tenant"),
+  tenantId: z.string().uuid().optional(),
+  whatsappMode: z.enum(["sent", "manual"]).default("sent"),
 });
 
-export async function POST(request: Request) {
-  const auth = await requireGymManagementApi({ allowSuperAdmin: true });
-  if (auth instanceof Response) {
-    return auth;
+type OutboxRow = {
+  tenantId: string;
+  toHash: string;
+  template: "whatsapp";
+  payloadJson: { to: string; body: string };
+  status: "queued";
+};
+
+type ManualWhatsappLink = {
+  name: string;
+  phone: string;
+  url: string;
+};
+
+function buildManualWhatsappLink(phone: string, message: string): string | null {
+  const normalizedPhone = phone.replace(/\D/g, "");
+  if (normalizedPhone.length < 8) {
+    return null;
   }
+
+  return `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`;
+}
+
+export async function POST(request: Request) {
+  const auth = await requireSuperAdminApi("Only super admins can send reminders");
+  if (auth instanceof Response) return auth;
 
   const body = await request.json().catch(() => null);
-  const parsed = reminderSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ message: "Invalid reminder payload" }, { status: 400 });
+  const parsed = sendSchema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ message: "Invalid payload" }, { status: 400 });
+
+  const { message, channel, scope, tenantId, whatsappMode } = parsed.data;
+
+  // Determine tenants to target
+  let tenants = [] as { id: string }[];
+  if (scope === "all_active_tenants") {
+    tenants = await db.tenant.findMany({ where: { status: "active" }, select: { id: true } });
+  } else if (tenantId) {
+    const t = await db.tenant.findUnique({ where: { id: tenantId }, select: { id: true } });
+    if (!t) return NextResponse.json({ message: "Tenant not found" }, { status: 404 });
+    tenants = [t];
+  } else if (auth.tenantId) {
+    tenants = [{ id: auth.tenantId }];
+  } else {
+    return NextResponse.json({ message: "No tenant specified" }, { status: 400 });
   }
 
-  if (parsed.data.scope === "all_active_tenants" && !auth.isSuperAdmin) {
-    return forbiddenResponse("Only super admins can send reminders to all gyms");
-  }
-
-  const tenantIds =
-    parsed.data.scope === "all_active_tenants"
-      ? (
-          await db.tenant.findMany({
-            where: { status: "active" },
-            select: { id: true },
-          })
-        ).map((tenant) => tenant.id)
-      : [auth.tenantId];
-
-  const users = await db.user.findMany({
-    where: {
-      tenantId: { in: tenantIds },
-      isActive: true,
-    },
-    select: {
-      id: true,
-      tenantId: true,
-      email: true,
-      fullName: true,
-    },
-    take: 1000,
-  });
-
+  let usersTargeted = 0;
   let emailSent = 0;
   let whatsappQueued = 0;
+  let whatsappSkippedNoPhone = 0;
+  let whatsappSkippedDecryptError = 0;
+  const whatsappManualLinks: ManualWhatsappLink[] = [];
 
-  if (parsed.data.channel === "email" || parsed.data.channel === "both") {
-    if (process.env.NODE_ENV === "development" || env.SMTP_HOST.includes("example")) {
-      emailSent = users.length;
-    } else {
-      const transporter = nodemailer.createTransport({
-        host: env.SMTP_HOST,
-        port: env.SMTP_PORT,
-        secure: false,
-        auth: {
-          user: env.SMTP_USER,
-          pass: env.SMTP_PASS,
-        },
-      });
+  for (const t of tenants) {
+    // ✅ Incluir phoneEnc del owner/manager para WhatsApp
+    const adminUsers = await db.user.findMany({
+      where: { tenantId: t.id, isActive: true, role: { in: ["owner", "manager"] } },
+      select: { email: true, fullName: true, phoneEnc: true },
+    });
 
-      for (const user of users) {
-        await transporter.sendMail({
-          from: env.EMAIL_FROM,
-          to: user.email,
-          subject: "Recordatorio Legions Club",
-          text: `${parsed.data.message}\n\nEquipo Legions Club`,
-          html: `<p>${parsed.data.message}</p><p><strong>Equipo Legions Club</strong></p>`,
+    usersTargeted += adminUsers.length;
+
+    const outboxRows: OutboxRow[] = [];
+
+    // Email para admins
+    if (channel === "email" || channel === "both") {
+      const shouldSend =
+        process.env.NODE_ENV !== "development" &&
+        !(typeof env.SMTP_HOST === "string" && env.SMTP_HOST.includes("example"));
+
+      if (shouldSend) {
+        const nodemailer = await import("nodemailer");
+        const transporter = nodemailer.createTransport({
+          host: env.SMTP_HOST,
+          port: Number(env.SMTP_PORT),
+          secure: Number(env.SMTP_PORT) === 465,
+          auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
         });
-        emailSent += 1;
+
+        for (const u of adminUsers) {
+          try {
+            await transporter.sendMail({
+              from: env.EMAIL_FROM,
+              to: u.email,
+              subject: "Recordatorio Legions Club",
+              text: `${message}\n\nEquipo Legions Club`,
+              html: `<p>${message}</p><p><strong>Equipo Legions Club</strong></p>`,
+            });
+            emailSent++;
+          } catch (err) {
+            console.error("Failed sending reminder email to user", u.email, err);
+          }
+        }
+      } else {
+        emailSent += adminUsers.length;
       }
     }
-  }
 
-  if (parsed.data.channel === "whatsapp" || parsed.data.channel === "both") {
-    const groupedByTenant = new Map<string, number>();
-    for (const user of users) {
-      groupedByTenant.set(user.tenantId, (groupedByTenant.get(user.tenantId) ?? 0) + 1);
+    // ✅ WhatsApp para admins usando phoneEnc del User
+    if (channel === "whatsapp" || channel === "both") {
+      for (const u of adminUsers) {
+        if (!u.phoneEnc) {
+          whatsappSkippedNoPhone++;
+          continue;
+        }
+
+        try {
+          const phone = decryptSensitiveValue(u.phoneEnc);
+          if (whatsappMode === "manual") {
+            const url = buildManualWhatsappLink(phone, message);
+            if (!url) {
+              whatsappSkippedNoPhone++;
+              continue;
+            }
+
+            whatsappManualLinks.push({
+              name: u.fullName ?? u.email,
+              phone,
+              url,
+            });
+          } else {
+            outboxRows.push({
+              tenantId: t.id,
+              toHash: hashPII(phone),
+              template: "whatsapp",
+              payloadJson: { to: phone, body: message },
+              status: "queued",
+            });
+            whatsappQueued++;
+          }
+        } catch (err) {
+          whatsappSkippedDecryptError++;
+          console.error("Error decrypting admin phone:", err);
+        }
+      }
     }
 
-    await Promise.all(
-      Array.from(groupedByTenant.entries()).map(([tenantId, recipients]) =>
-        db.auditLog.create({
-          data: {
-            tenantId,
-            actorUserId: auth.userId,
-            action: "reminder_whatsapp_queued",
-            entityType: "reminder_batch",
-            metadataJson: {
-              scope: parsed.data.scope,
-              recipients,
-              message: parsed.data.message,
-            },
-          },
-        }),
-      ),
-    );
-
-    whatsappQueued = users.length;
+    if (outboxRows.length > 0) {
+      await db.emailOutbox.createMany({ data: outboxRows });
+    }
   }
 
-  await db.auditLog.create({
-    data: {
-      tenantId: auth.tenantId,
-      actorUserId: auth.userId,
-      action: "reminder_batch_sent",
-      entityType: "reminder_batch",
-      metadataJson: {
-        scope: parsed.data.scope,
-        channel: parsed.data.channel,
-        usersTargeted: users.length,
-        emailSent,
-        whatsappQueued,
-      },
-    },
-  });
+  // Procesa la cola de WhatsApp inmediatamente
+  if (whatsappMode === "sent" && whatsappQueued > 0) {
+    try {
+      await processWhatsappQueue();
+    } catch (err) {
+      console.error("Error procesando cola WhatsApp:", err);
+    }
+  }
 
   return NextResponse.json({
     ok: true,
-    usersTargeted: users.length,
+    usersTargeted,
     emailSent,
     whatsappQueued,
-    whatsappMode: "queued",
+    whatsappSkippedNoPhone,
+    whatsappSkippedDecryptError,
+    whatsappMode,
+    whatsappManualLinks,
   });
 }

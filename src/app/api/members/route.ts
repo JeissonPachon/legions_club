@@ -4,6 +4,9 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireGymManagementApi } from "@/modules/gym/auth";
 import { encryptSensitiveValue, hashPII } from "@/lib/security/crypto";
+import { randomBytes } from "crypto";
+import bcrypt from "bcryptjs";
+import { sendMemberPasswordEmail } from "@/lib/email/send-member-password-email";
 
 const createMemberSchema = z.object({
   fullName: z.string().min(2),
@@ -93,6 +96,11 @@ export async function POST(request: Request) {
   }
 
   const result = await db.$transaction(async (tx) => {
+    // Generar contraseña aleatoria segura
+    const plainPassword = randomBytes(8).toString("base64url");
+    const passwordHash = await bcrypt.hash(plainPassword, 10);
+
+    // 1. Crear el miembro
     const member = await tx.member.create({
       data: {
         tenantId: auth.tenantId,
@@ -101,10 +109,14 @@ export async function POST(request: Request) {
         documentLast4: parsed.data.document.slice(-4),
         emailHash: parsed.data.email ? hashPII(parsed.data.email) : null,
         phoneHash: parsed.data.phone ? hashPII(parsed.data.phone) : null,
+        // ← phoneEnc eliminado de aquí
         sensitive: {
           create: {
+            phoneEnc: parsed.data.phone ? encryptSensitiveValue(parsed.data.phone) : null, // ✅ movido aquí
             injuriesEnc: parsed.data.injuries ? encryptSensitiveValue(parsed.data.injuries) : null,
-            conditionsEnc: parsed.data.conditions ? encryptSensitiveValue(parsed.data.conditions) : null,
+            conditionsEnc: parsed.data.conditions
+              ? encryptSensitiveValue(parsed.data.conditions)
+              : null,
             emergencyNameEnc: parsed.data.emergencyName
               ? encryptSensitiveValue(parsed.data.emergencyName)
               : null,
@@ -125,6 +137,25 @@ export async function POST(request: Request) {
         createdAt: true,
       },
     });
+
+    // 2. Crear el User por separado si tiene email (Member y User no tienen relación directa)
+    if (parsed.data.email) {
+      await tx.user.create({
+        data: {
+          tenantId: auth.tenantId,
+          fullName: parsed.data.fullName,
+          email: parsed.data.email.toLowerCase(),
+          passwordHash,
+          phoneHash: parsed.data.phone ? hashPII(parsed.data.phone) : "",
+          phoneEnc: parsed.data.phone ? encryptSensitiveValue(parsed.data.phone) : "",
+          role: "athlete",
+          isActive: true,
+        },
+      });
+
+      // 3. Enviar contraseña por email
+      await sendMemberPasswordEmail(parsed.data.email, plainPassword);
+    }
 
     let createdSubscriptionId: string | null = null;
 

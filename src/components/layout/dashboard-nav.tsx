@@ -43,7 +43,7 @@ const superAdminNavigation: NavItem[] = [
   { href: "/dashboard/super-admin", label: "Panel general", icon: ShieldCheck, match: "exact" },
   { href: "/dashboard/super-admin/finance", label: "Finanzas SaaS", icon: HandCoins, match: "prefix" },
   { href: "/dashboard/super-admin/reminders", label: "Recordatorios", icon: WalletCards, match: "prefix" },
-  { href: "/dashboard/super-admin/discounts", label: "Descuentos", icon: Settings, match: "prefix" },
+  { href: "/dashboard/super-admin/discounts", label: "Bonificación", icon: Settings, match: "prefix" },
   { href: "/dashboard/super-admin/tenants", label: "Gimnasios", icon: Users, match: "prefix" },
   { href: "/dashboard/super-admin/settings", label: "Configuracion", icon: Settings, match: "prefix" },
 ];

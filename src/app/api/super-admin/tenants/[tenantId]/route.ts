@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { setAuthCookie } from "@/lib/auth/cookies";
 import { signSessionJwt } from "@/lib/auth/session";
+import { encryptSensitiveValue, hashPII } from "@/lib/security/crypto";
 import { requireSuperAdminApi } from "@/modules/super-admin/auth";
 
 const updateTenantSchema = z.object({
@@ -10,6 +11,8 @@ const updateTenantSchema = z.object({
   legalName: z.string().min(2).optional(),
   displayName: z.string().min(2).optional(),
   discipline: z.enum(["gym", "powerlifting", "crossfit", "pilates", "hyrox", "mma", "other"]).optional(),
+  adminEmail: z.string().email().optional(),
+  adminPhone: z.string().min(7).regex(/^\+?[1-9]\d{6,14}$/).optional(),
 });
 
 const deleteTenantSchema = z.object({
@@ -81,6 +84,53 @@ export async function PATCH(request: Request, context: RouteContext) {
       },
     });
 
+    // Si se provee adminEmail, actualizar el email del owner
+    let ownerEmailBefore: string | null = null;
+    let ownerEmailAfter: string | null = null;
+    let ownerPhoneBefore: string | null = null;
+    let ownerPhoneAfter: string | null = null;
+
+    if (parsed.data.adminEmail) {
+      const owner = await tx.user.findFirst({ where: { tenantId: existing.id, role: "owner" } });
+      if (!owner) {
+        throw new Error("No se encontro el usuario administrador para este gimnasio");
+      }
+
+      ownerEmailBefore = owner.email;
+      const nextAdminEmail = parsed.data.adminEmail.toLowerCase();
+
+      const conflict = await tx.user.findFirst({
+        where: { tenantId: existing.id, email: nextAdminEmail, NOT: { id: owner.id } },
+      });
+      if (conflict) {
+        throw new Error("El correo ya esta en uso por otro usuario en este gimnasio");
+      }
+
+      const updatedOwner = await tx.user.update({
+        where: { id: owner.id },
+        data: { email: nextAdminEmail },
+      });
+      ownerEmailAfter = updatedOwner.email;
+    }
+
+    // ✅ Si se provee adminPhone, guardar phoneHash Y phoneEnc en el owner
+    if (parsed.data.adminPhone) {
+      const owner = await tx.user.findFirst({ where: { tenantId: existing.id, role: "owner" } });
+      if (!owner) {
+        throw new Error("No se encontro el usuario administrador para este gimnasio");
+      }
+
+      ownerPhoneBefore = owner.phoneHash ?? null;
+      const phoneHash = hashPII(parsed.data.adminPhone);
+      const phoneEnc = encryptSensitiveValue(parsed.data.adminPhone); // ✅ encriptado para WhatsApp
+
+      const updatedOwner = await tx.user.update({
+        where: { id: owner.id },
+        data: { phoneHash, phoneEnc }, // ✅ ambos campos
+      });
+      ownerPhoneAfter = updatedOwner.phoneHash ?? null;
+    }
+
     await tx.auditLog.create({
       data: {
         tenantId: existing.id,
@@ -94,12 +144,16 @@ export async function PATCH(request: Request, context: RouteContext) {
             displayName: existing.displayName,
             legalName: existing.legalName,
             discipline: existing.discipline,
+            adminEmail: ownerEmailBefore,
+            adminPhone: ownerPhoneBefore,
           },
           next: {
             slug: tenant.slug,
             displayName: tenant.displayName,
             legalName: tenant.legalName,
             discipline: tenant.discipline,
+            adminEmail: ownerEmailAfter,
+            adminPhone: ownerPhoneAfter,
           },
         },
       },

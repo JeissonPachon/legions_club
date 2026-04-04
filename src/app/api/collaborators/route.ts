@@ -82,6 +82,8 @@ export async function POST(request: Request) {
         fullName: parsed.data.fullName.trim(),
         email,
         passwordHash,
+        phoneHash: "",
+        phoneEnc: "",
         isActive: true,
       },
       select: {

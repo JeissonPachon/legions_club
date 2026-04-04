@@ -60,6 +60,9 @@ export async function GET() {
     userId: auth.userId,
   });
 
+  // obtener nombre del gym (tenant)
+  const tenant = await db.tenant.findUnique({ where: { id: auth.tenantId }, select: { displayName: true } });
+
   return NextResponse.json({
     hasMember: true,
     member,
@@ -73,5 +76,6 @@ export async function GET() {
           endDate: subscription.endDate,
         }
       : null,
+    gymName: tenant?.displayName ?? null,
   });
 }

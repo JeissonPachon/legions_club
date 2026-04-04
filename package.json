@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
-    "@prisma/adapter-pg": "^7.4.2",
+    "@prisma/adapter-pg": "^7.6.0",
     "@prisma/client": "^7.4.2",
     "@tanstack/react-query": "^5.90.21",
     "@tanstack/react-query-devtools": "^5.91.3",
@@ -34,12 +34,14 @@
     "next-themes": "^0.4.6",
     "nodemailer": "^8.0.1",
     "pg": "^8.20.0",
+    "qrcode.react": "^4.2.0",
     "radix-ui": "^1.4.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-hook-form": "^7.71.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
+    "twilio": "^5.13.1",
     "uuid": "^13.0.0",
     "zod": "^4.3.6"
   },

@@ -1,11 +1,12 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, Shield, Trophy, Users, Zap, LayoutDashboard, Database } from "lucide-react";
+import { ArrowRight, Trophy, Users, Zap, LayoutDashboard, Database } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { Sedgwick_Ave_Display } from "next/font/google";
+import { getSaasMonthlyFeeSnapshot } from "@/lib/billing/monthly-fee";
 
 const sedgwick = Sedgwick_Ave_Display({
   weight: "400",
@@ -13,7 +14,22 @@ const sedgwick = Sedgwick_Ave_Display({
   display: "swap",
 });
 
-export default function Home() {
+export default async function Home() {
+  const feeSnapshot = await getSaasMonthlyFeeSnapshot();
+  const currentFeeFormatted = new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+  }).format(feeSnapshot.currentFeeCents / 100);
+
+  let nextFeeNote: string | null = null;
+  if (feeSnapshot.nextFeeCents && feeSnapshot.nextEffectiveFrom) {
+    const nextDate = new Date(feeSnapshot.nextEffectiveFrom);
+    const nextFeeFormatted = new Intl.NumberFormat("es-CO", {
+      style: "currency",
+      currency: "COP",
+    }).format(feeSnapshot.nextFeeCents / 100);
+    nextFeeNote = `A partir de ${nextDate.toLocaleDateString("es-CO", { year: "numeric", month: "short" })} será ${nextFeeFormatted}/mes`;
+  }
   return (
     <main className="relative flex min-h-screen w-full flex-col overflow-hidden">
       {/* Dynamic Background Image */}
@@ -84,6 +100,10 @@ export default function Home() {
                   <LayoutDashboard className="size-5 text-[var(--brand)]" />
                   Ecosistema Completo
                 </CardTitle>
+                <div className="mt-2 text-sm text-zinc-300">
+                  Precio SaaS: <span className="font-semibold text-white">{currentFeeFormatted}/mes</span>
+                  {nextFeeNote ? <div className="text-xs text-zinc-400 mt-1">{nextFeeNote}</div> : null}
+                </div>
               </CardHeader>
               <CardContent className="space-y-6 pt-6">
                 <div className="flex gap-4">

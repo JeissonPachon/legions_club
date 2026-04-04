@@ -22,6 +22,11 @@ const envSchema = z.object({
   ENCRYPTION_KEY: z.string().min(32),
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+  // Twilio / WhatsApp
+  TWILIO_ACCOUNT_SID: z.string().min(1).optional(),
+  TWILIO_AUTH_TOKEN: z.string().min(1).optional(),
+  TWILIO_WHATSAPP_FROM: z.string().min(1).optional(),
+  TWILIO_WHATSAPP_CONTENT_SID: z.string().min(1).optional(),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
@@ -50,4 +55,9 @@ export const env = envSchema.parse({
   ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
   UPSTASH_REDIS_REST_URL: emptyToUndefined(process.env.UPSTASH_REDIS_REST_URL),
   UPSTASH_REDIS_REST_TOKEN: emptyToUndefined(process.env.UPSTASH_REDIS_REST_TOKEN),
+  // Twilio / WhatsApp
+  TWILIO_ACCOUNT_SID: emptyToUndefined(process.env.TWILIO_ACCOUNT_SID),
+  TWILIO_AUTH_TOKEN: emptyToUndefined(process.env.TWILIO_AUTH_TOKEN),
+  TWILIO_WHATSAPP_FROM: emptyToUndefined(process.env.TWILIO_WHATSAPP_FROM),
+  TWILIO_WHATSAPP_CONTENT_SID: emptyToUndefined(process.env.TWILIO_WHATSAPP_CONTENT_SID),
 });

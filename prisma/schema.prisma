@@ -6,67 +6,27 @@ datasource db {
   provider = "postgresql"
 }
 
-enum TenantStatus {
-  active
-  suspended
-  archived
-}
-
-enum UserRole {
-  owner
-  manager
-  coach
-  athlete
-}
-
-enum ChallengePurpose {
-  login
-  privileged_action
-}
-
-enum SubscriptionStatus {
-  active
-  paused
-  canceled
-  expired
-}
-
-enum AttendanceEventType {
-  check_in
-  renewal
-  cancelation
-  adjustment
-}
-
-enum GymDiscipline {
-  gym
-  powerlifting
-  crossfit
-  pilates
-  hyrox
-  mma
-  other
-}
-
 model Tenant {
-  id            String               @id @default(uuid()) @db.Uuid
-  slug          String               @unique
-  legalName     String
-  displayName   String
-  discipline    GymDiscipline        @default(gym)
-  timezone      String               @default("UTC")
-  status        TenantStatus         @default(active)
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
-  users         User[]
-  members       Member[]
-  plans         Plan[]
-  subscriptions Subscription[]
-  sessions      Session[]
-  twoFactor     TwoFactorChallenge[]
-  events        AttendanceEvent[]
-  audits        AuditLog[]
-  outbox        EmailOutbox[]
+  id              String               @id @default(uuid()) @db.Uuid
+  slug            String               @unique
+  legalName       String
+  displayName     String
+  discipline      GymDiscipline        @default(gym)
+  timezone        String               @default("UTC")
+  status          TenantStatus         @default(active)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  nit             String?
+  anthropometrics Anthropometric[]
+  events          AttendanceEvent[]
+  audits          AuditLog[]
+  outbox          EmailOutbox[]
+  members         Member[]
+  plans           Plan[]
+  sessions        Session[]
+  subscriptions   Subscription[]
+  twoFactor       TwoFactorChallenge[]
+  users           User[]
 
   @@map("tenants")
 }
@@ -74,20 +34,22 @@ model Tenant {
 model User {
   id                   String               @id @default(uuid()) @db.Uuid
   tenantId             String               @db.Uuid
-  tenant               Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   role                 UserRole
   fullName             String
   email                String
   passwordHash         String
+  phoneHash            String
+  phoneEnc             String
   isActive             Boolean              @default(true)
   lastLoginAt          DateTime?
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
-  sessions             Session[]
-  challenges           TwoFactorChallenge[]
-  subscriptionsCreated Subscription[]       @relation("subscriptionCreatedBy")
   eventsPerformed      AttendanceEvent[]    @relation("eventPerformedBy")
   audits               AuditLog[]           @relation("auditActor")
+  sessions             Session[]
+  subscriptionsCreated Subscription[]       @relation("subscriptionCreatedBy")
+  challenges           TwoFactorChallenge[]
+  tenant               Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, email])
   @@index([tenantId, role, isActive])
@@ -130,21 +92,22 @@ model TwoFactorChallenge {
 }
 
 model Member {
-  id            String            @id @default(uuid()) @db.Uuid
-  tenantId      String            @db.Uuid
-  tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  fullName      String
-  documentHash  String
-  documentLast4 String
-  emailHash     String?
-  phoneHash     String?
-  isActive      Boolean           @default(true)
-  deletedAt     DateTime?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  sensitive     MemberSensitive?
-  subscriptions Subscription[]
-  attendance    AttendanceEvent[]
+  id              String            @id @default(uuid()) @db.Uuid
+  tenantId        String            @db.Uuid
+  fullName        String
+  documentHash    String
+  documentLast4   String
+  emailHash       String?
+  phoneHash       String?
+  isActive        Boolean           @default(true)
+  deletedAt       DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  anthropometrics Anthropometric[]
+  attendance      AttendanceEvent[]
+  sensitive       MemberSensitive?
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriptions   Subscription[]
 
   @@unique([tenantId, documentHash])
   @@index([tenantId, fullName])
@@ -154,13 +117,14 @@ model Member {
 
 model MemberSensitive {
   memberId             String   @id @db.Uuid
-  member               Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  phoneEnc             String?
   injuriesEnc          String?
   conditionsEnc        String?
   emergencyNameEnc     String?
   emergencyPhoneEnc    String?
   emergencyRelationEnc String?
   updatedAt            DateTime @updatedAt
+  member               Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   @@map("member_sensitive")
 }
@@ -168,7 +132,6 @@ model MemberSensitive {
 model Plan {
   id               String         @id @default(uuid()) @db.Uuid
   tenantId         String         @db.Uuid
-  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name             String
   sessionsPerMonth Int
   durationDays     Int
@@ -177,6 +140,7 @@ model Plan {
   isActive         Boolean        @default(true)
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   subscriptions    Subscription[]
 
   @@unique([tenantId, name])
@@ -199,11 +163,11 @@ model Subscription {
   createdByUserId   String             @db.Uuid
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
-  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  member            Member             @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  plan              Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
-  createdByUser     User               @relation("subscriptionCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
   events            AttendanceEvent[]
+  createdByUser     User               @relation("subscriptionCreatedBy", fields: [createdByUserId], references: [id])
+  member            Member             @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  plan              Plan               @relation(fields: [planId], references: [id])
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, memberId, status, endDate])
   @@map("subscriptions")
@@ -222,10 +186,10 @@ model AttendanceEvent {
   performedByUserId String              @db.Uuid
   notes             String?
   createdAt         DateTime            @default(now())
-  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   member            Member              @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  performedByUser   User                @relation("eventPerformedBy", fields: [performedByUserId], references: [id])
   subscription      Subscription        @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  performedByUser   User                @relation("eventPerformedBy", fields: [performedByUserId], references: [id], onDelete: Restrict)
+  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, idempotencyKey])
   @@index([tenantId, memberId, createdAt])
@@ -241,8 +205,8 @@ model AuditLog {
   entityId     String?
   metadataJson Json?
   createdAt    DateTime @default(now())
+  actor        User     @relation("auditActor", fields: [actorUserId], references: [id])
   tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  actor        User     @relation("auditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, createdAt])
   @@map("audit_logs")
@@ -263,4 +227,139 @@ model EmailOutbox {
 
   @@index([tenantId, status, createdAt])
   @@map("email_outbox")
+}
+
+model Anthropometric {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id        String   @db.Uuid
+  member_id        String   @db.Uuid
+  measured_at      DateTime @default(now()) @db.Timestamptz(6)
+  weight_kg        Float?
+  height_cm        Float?
+  body_fat_percent Float?
+  cintura_cm       Float? // waist
+  cadera_cm        Float? // hip
+  pecho_cm         Float? // chest
+  brazo_derecho_cm Float?
+  brazo_izquierdo_cm Float?
+  antebrazo_derecho_cm Float?
+  antebrazo_izquierdo_cm Float?
+  pierna_derecha_cm Float?
+  pierna_izquierda_cm Float?
+  pantorrilla_derecha_cm Float?
+  pantorrilla_izquierda_cm Float?
+  notas            String?
+  fotos_json       Json?
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime @default(now()) @db.Timestamptz(6)
+  members          Member   @relation(fields: [member_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "anthropometrics_member_fk")
+  tenants          Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "anthropometrics_tenant_fk")
+
+  @@index([tenant_id, member_id, measured_at(sort: Desc)], map: "idx_anthropometrics_tenant_member_measuredat")
+  @@map("anthropometrics")
+}
+
+model gym_admins {
+  id            Int       @id @default(autoincrement())
+  username      String    @unique @db.VarChar(120)
+  password_hash String    @db.VarChar(255)
+  role          String    @default("admin") @db.VarChar(20)
+  is_active     Boolean   @default(true)
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  updated_at    DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model gym_members {
+  id                      Int                 @id @default(autoincrement())
+  full_name               String              @db.VarChar(180)
+  document                String              @unique @db.VarChar(50)
+  phone                   String?             @db.VarChar(50)
+  email                   String?             @db.VarChar(120)
+  injuries                String?
+  conditions_text         String?
+  emergency_contact_name  String?             @db.VarChar(180)
+  emergency_contact_phone String?             @db.VarChar(50)
+  created_at              DateTime?           @default(now()) @db.Timestamp(6)
+  gym_subscriptions       gym_subscriptions[]
+}
+
+model gym_plans {
+  id                 Int                 @id @default(autoincrement())
+  name               String              @db.VarChar(120)
+  sessions_per_month Int
+  price              Decimal             @default(0) @db.Decimal(10, 2)
+  is_active          Boolean             @default(true)
+  created_at         DateTime?           @default(now()) @db.Timestamp(6)
+  gym_subscriptions  gym_subscriptions[]
+}
+
+model gym_session_logs {
+  id               Int       @id @default(autoincrement())
+  member_id        Int?
+  member_document  String?   @db.VarChar(50)
+  member_name      String?   @db.VarChar(180)
+  subscription_id  Int?
+  action           String    @db.VarChar(40)
+  remaining_before Int?
+  remaining_after  Int?
+  performed_by     String    @db.VarChar(120)
+  performed_role   String    @db.VarChar(20)
+  notes            String?   @db.VarChar(255)
+  created_at       DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model gym_subscriptions {
+  id                 Int         @id @default(autoincrement())
+  member_id          Int
+  plan_id            Int
+  start_date         DateTime    @db.Date
+  end_date           DateTime    @db.Date
+  remaining_sessions Int
+  status             String      @default("active") @db.VarChar(20)
+  created_at         DateTime?   @default(now()) @db.Timestamp(6)
+  updated_at         DateTime?   @default(now()) @db.Timestamp(6)
+  gym_members        gym_members @relation(fields: [member_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_sub_member")
+  gym_plans          gym_plans   @relation(fields: [plan_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_sub_plan")
+}
+
+enum TenantStatus {
+  active
+  suspended
+  archived
+}
+
+enum UserRole {
+  owner
+  manager
+  coach
+  athlete
+}
+
+enum ChallengePurpose {
+  login
+  privileged_action
+}
+
+enum SubscriptionStatus {
+  active
+  paused
+  canceled
+  expired
+}
+
+enum AttendanceEventType {
+  check_in
+  renewal
+  cancelation
+  adjustment
+}
+
+enum GymDiscipline {
+  gym
+  powerlifting
+  crossfit
+  pilates
+  hyrox
+  mma
+  other
 }

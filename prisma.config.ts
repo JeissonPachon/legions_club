@@ -9,4 +9,11 @@ export default defineConfig({
   datasource: {
     url: env("DATABASE_URL"),
   },
+  // @ts-expect-error - `migrate` is used at runtime by our setup though types may not include it
+  migrate: {
+    async adapter() {
+      const { PrismaPg } = await import("@prisma/adapter-pg");
+      return new PrismaPg({ connectionString: env("DIRECT_URL") });
+    },
+  },
 });

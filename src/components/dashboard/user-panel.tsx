@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import Image from "next/image";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChangePassword } from "@/components/mi-perfil/change-password";
 
 type UserPanelPayload = {
   hasMember: boolean;
@@ -13,6 +14,7 @@ type UserPanelPayload = {
     fullName: string;
     documentLast4: string;
   };
+  gymName?: string;
   qrPayload?: string;
   subscription?: {
     planName: string;
@@ -63,6 +65,16 @@ export function UserPanel() {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
+      {query.data?.gymName ? (
+        <div className="lg:col-span-2">
+          <Card className="border-2">
+            <CardHeader>
+              <CardTitle>Gimnasio</CardTitle>
+            </CardHeader>
+            <CardContent>{query.data.gymName}</CardContent>
+          </Card>
+        </div>
+      ) : null}
       <Card className="border-2">
         <CardHeader>
           <CardTitle>Tu codigo QR de acceso</CardTitle>
@@ -111,6 +123,18 @@ export function UserPanel() {
           )}
         </CardContent>
       </Card>
+
+      <div className="lg:col-span-2">
+        <Card className="border-2">
+          <CardHeader>
+            <CardTitle>Seguridad</CardTitle>
+            <CardDescription>Cambia tu contrasena por una mas personal</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChangePassword />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -51,6 +51,10 @@ export async function GET(_: Request, context: RouteContext) {
       documentLast4: member.documentLast4,
       hasEmail: Boolean(member.emailHash),
       hasPhone: Boolean(member.phoneHash),
+      // ✅ phoneEnc ahora viene de sensitive
+      phone: member.sensitive?.phoneEnc
+        ? decryptSensitiveValue(member.sensitive.phoneEnc)
+        : null,
       isActive: member.isActive,
       createdAt: member.createdAt,
       sensitive: member.sensitive
@@ -103,6 +107,8 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   const sensitiveUpdate = {
+    // ✅ phoneEnc ahora va en sensitive
+    phoneEnc: parsed.data.phone ? encryptSensitiveValue(parsed.data.phone) : undefined,
     injuriesEnc: parsed.data.injuries ? encryptSensitiveValue(parsed.data.injuries) : undefined,
     conditionsEnc: parsed.data.conditions ? encryptSensitiveValue(parsed.data.conditions) : undefined,
     emergencyNameEnc: parsed.data.emergencyName
@@ -116,6 +122,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       : undefined,
   };
 
+  // ✅ Eliminado el (db as any) y phoneEnc del member
   const member = await db.member.update({
     where: { id: target.id },
     data: {
@@ -124,14 +131,11 @@ export async function PATCH(request: Request, context: RouteContext) {
       documentLast4: parsed.data.document ? parsed.data.document.slice(-4) : undefined,
       emailHash: parsed.data.email ? hashPII(parsed.data.email) : undefined,
       phoneHash: parsed.data.phone ? hashPII(parsed.data.phone) : undefined,
+      // ← phoneEnc eliminado de aquí
       isActive: parsed.data.isActive,
       sensitive: target.sensitive
-        ? {
-            update: sensitiveUpdate,
-          }
-        : {
-            create: sensitiveUpdate,
-          },
+        ? { update: sensitiveUpdate }
+        : { create: sensitiveUpdate },
     },
     select: {
       id: true,

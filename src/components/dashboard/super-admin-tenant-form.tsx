@@ -25,11 +25,24 @@ type TenantRow = {
   slug: string;
   displayName: string;
   legalName: string;
+  nit: string | null;
   discipline: string;
   status: string;
   createdAt: string;
   usersCount: number;
   membersCount: number;
+  ownerEmail: string | null;
+  ownerPhone: string | null;
+};
+
+type TenantCreateResponse = {
+  tenant: {
+    displayName: string;
+  };
+  owner: {
+    email: string;
+  };
+  message?: string;
 };
 
 async function fetchTenants(includeArchived: boolean): Promise<{ tenants: TenantRow[] }> {
@@ -54,6 +67,8 @@ export function SuperAdminTenantForm() {
   const [adminName, setAdminName] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
+  const [adminPhone, setAdminPhone] = useState("");
+  const [nit, setNit] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -63,6 +78,8 @@ export function SuperAdminTenantForm() {
   const [editLegalName, setEditLegalName] = useState("");
   const [editDisplayName, setEditDisplayName] = useState("");
   const [editDiscipline, setEditDiscipline] = useState<Discipline>("gym");
+  const [editAdminEmail, setEditAdminEmail] = useState("");
+  const [editAdminPhone, setEditAdminPhone] = useState("");
 
   const tenantsQuery = useQuery({
     queryKey: ["super-admin-tenants", showArchived],
@@ -108,6 +125,8 @@ export function SuperAdminTenantForm() {
       legalName: string;
       displayName: string;
       discipline: Discipline;
+      adminEmail?: string;
+      adminPhone?: string;
     }) => {
       const response = await fetch(`/api/super-admin/tenants/${input.tenantId}`, {
         method: "PATCH",
@@ -117,6 +136,8 @@ export function SuperAdminTenantForm() {
           legalName: input.legalName,
           displayName: input.displayName,
           discipline: input.discipline,
+          ...(input.adminEmail ? { adminEmail: input.adminEmail } : {}),
+          ...(input.adminPhone ? { adminPhone: input.adminPhone } : {}),
         }),
       });
 
@@ -172,6 +193,8 @@ export function SuperAdminTenantForm() {
     setEditLegalName(tenant.legalName);
     setEditDisplayName(tenant.displayName);
     setEditDiscipline(tenant.discipline as Discipline);
+    setEditAdminEmail(tenant.ownerEmail ?? "");
+    setEditAdminPhone(tenant.ownerPhone ?? "");
   }
 
   function deleteTenantWithVerification(tenant: TenantRow) {
@@ -188,13 +211,18 @@ export function SuperAdminTenantForm() {
     deleteTenantMutation.mutate({ tenantId: tenant.id, verificationText });
   }
 
+  const phoneRegex = /^\+?[1-9]\d{6,14}$/; // E.164-ish: optional +, 7-15 digits, no leading zero
+
   const isValid =
     tenantSlug.length >= 2 &&
     legalName.length >= 2 &&
     displayName.length >= 2 &&
+    // nit is optional but if provided should be at least 3 chars
+    (nit.length === 0 || nit.length >= 3) &&
     adminName.length >= 2 &&
     adminEmail.includes("@") &&
-    adminPassword.length >= 8;
+    adminPassword.length >= 8 &&
+    phoneRegex.test(adminPhone);
 
   async function handleSubmit() {
     setError(null);
@@ -208,25 +236,42 @@ export function SuperAdminTenantForm() {
         body: JSON.stringify({
           tenantSlug,
           legalName,
+            nit,
           displayName,
           discipline,
           adminName,
           adminEmail,
-          adminPassword,
+            adminPassword,
+            ...(adminPhone ? { adminPhone } : {}),
         }),
       });
 
-      const payload = await response.json();
+      let payload: TenantCreateResponse | null = null;
+      try {
+        payload = (await response.json()) as TenantCreateResponse;
+      } catch {
+        // empty or invalid JSON
+        const text = await response.text().catch(() => "");
+        payload = text ? { message: text, tenant: { displayName: "" }, owner: { email: "" } } : null;
+      }
+
       if (!response.ok) {
-        throw new Error(payload.message ?? "No fue posible crear el gimnasio");
+        const msg = payload?.message || response.statusText || "No fue posible crear el gimnasio";
+        throw new Error(msg);
+      }
+
+      if (!payload?.tenant?.displayName || !payload?.owner?.email) {
+        throw new Error("Respuesta invalida del servidor al crear gimnasio");
       }
 
       setTenantSlug("");
       setLegalName("");
       setDisplayName("");
+      setNit("");
       setDiscipline("gym");
       setAdminName("");
       setAdminEmail("");
+      setAdminPhone("");
       setAdminPassword("");
 
       setSuccess(
@@ -317,17 +362,37 @@ export function SuperAdminTenantForm() {
                 onChange={(event) => setAdminEmail(event.target.value.toLowerCase())}
               />
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="adminPassword">Contrasena temporal del administrador</Label>
-            <Input
-              id="adminPassword"
-              type="password"
-              placeholder="Minimo 8 caracteres"
-              value={adminPassword}
-              onChange={(event) => setAdminPassword(event.target.value)}
-            />
+            <div className="space-y-2">
+              <Label htmlFor="adminPhone">Telefono del administrador (WhatsApp)</Label>
+              <Input
+                id="adminPhone"
+                placeholder="+573001234567"
+                value={adminPhone}
+                onChange={(event) => setAdminPhone(event.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="nit">NIT</Label>
+              <Input
+                id="nit"
+                placeholder="900123456-7"
+                value={nit}
+                onChange={(event) => setNit(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="adminPassword">Contrasena temporal del administrador</Label>
+              <Input
+                id="adminPassword"
+                type="password"
+                placeholder="Minimo 8 caracteres"
+                value={adminPassword}
+                onChange={(event) => setAdminPassword(event.target.value)}
+              />
+            </div>
+
           </div>
 
           <Button disabled={!isValid || isLoading} onClick={handleSubmit} className="w-full sm:w-auto">
@@ -404,6 +469,14 @@ export function SuperAdminTenantForm() {
                     <Label className="text-xs">Razon social</Label>
                     <Input value={editLegalName} onChange={(event) => setEditLegalName(event.target.value)} />
                   </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Correo administrador</Label>
+                    <Input value={editAdminEmail} onChange={(event) => setEditAdminEmail(event.target.value.toLowerCase())} placeholder="owner@newgym.com" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Telefono administrador (WhatsApp)</Label>
+                    <Input value={editAdminPhone} onChange={(event) => setEditAdminPhone(event.target.value)} placeholder="+573001234567" />
+                  </div>
                   <Button
                     size="sm"
                     onClick={() =>
@@ -413,6 +486,8 @@ export function SuperAdminTenantForm() {
                         legalName: editLegalName,
                         displayName: editDisplayName,
                         discipline: editDiscipline,
+                        adminEmail: editAdminEmail?.length ? editAdminEmail : undefined,
+                        adminPhone: editAdminPhone?.length ? editAdminPhone : undefined,
                       })
                     }
                     disabled={editTenantMutation.isPending}

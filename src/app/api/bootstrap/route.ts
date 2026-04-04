@@ -55,6 +55,8 @@ export async function POST(request: Request) {
         fullName: parsed.data.adminName,
         email: parsed.data.adminEmail.toLowerCase(),
         passwordHash,
+        phoneHash: "",
+        phoneEnc: "",
       },
     });
 
