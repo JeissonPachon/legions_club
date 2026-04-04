@@ -36,6 +36,11 @@ type DiscountAuditLogRow = {
   createdAt: Date;
 };
 
+type TenantOption = {
+  id: string;
+  displayName: string;
+};
+
 function toDiscount(log: {
   id: string;
   metadataJson: unknown;
@@ -107,14 +112,16 @@ export async function GET() {
 
   const tenantIds = Array.from(new Set(rawDiscounts.map((discount) => discount.tenantId).filter(Boolean))) as string[];
 
-  const tenants = tenantIds.length
+  const tenants: TenantOption[] = tenantIds.length
     ? await db.tenant.findMany({
         where: { id: { in: tenantIds } },
         select: { id: true, displayName: true },
       })
     : [];
 
-  const tenantMap = new Map(tenants.map((tenant) => [tenant.id, tenant.displayName]));
+  const tenantMap = new Map<string, string>(
+    tenants.map((tenant: TenantOption): [string, string] => [tenant.id, tenant.displayName]),
+  );
 
   const discounts: DiscountRow[] = rawDiscounts.map((discount) => ({
     ...discount,
