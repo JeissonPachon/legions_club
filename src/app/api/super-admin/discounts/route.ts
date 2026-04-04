@@ -30,6 +30,12 @@ type DiscountRow = {
   createdAt: string;
 };
 
+type DiscountAuditLogRow = {
+  id: string;
+  metadataJson: unknown;
+  createdAt: Date;
+};
+
 function toDiscount(log: {
   id: string;
   metadataJson: unknown;
@@ -82,7 +88,7 @@ export async function GET() {
     return auth;
   }
 
-  const logs = await db.auditLog.findMany({
+  const logs: DiscountAuditLogRow[] = await db.auditLog.findMany({
     where: {
       action: "discount_created",
       entityType: "discount_rule",
@@ -91,9 +97,13 @@ export async function GET() {
     take: 200,
   });
 
-  const rawDiscounts = logs
-    .map(toDiscount)
-    .filter((discount): discount is NonNullable<typeof discount> => discount !== null);
+  const rawDiscounts: Array<Omit<DiscountRow, "tenantName">> = [];
+  for (const log of logs) {
+    const discount = toDiscount(log);
+    if (discount) {
+      rawDiscounts.push(discount);
+    }
+  }
 
   const tenantIds = Array.from(new Set(rawDiscounts.map((discount) => discount.tenantId).filter(Boolean))) as string[];
 
