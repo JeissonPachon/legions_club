@@ -97,6 +97,7 @@ export default function MembersPage() {
   const [editEmergencyName, setEditEmergencyName] = useState("");
   const [editEmergencyPhone, setEditEmergencyPhone] = useState("");
   const [editEmergencyRelation, setEditEmergencyRelation] = useState("");
+  const [deletingMemberId, setDeletingMemberId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -181,6 +182,41 @@ export default function MembersPage() {
       setEditingMemberId(null);
     },
   });
+
+  const deleteMember = useMutation({
+    mutationFn: async (memberId: string) => {
+      const response = await fetch(`/api/members/${memberId}`, {
+        method: "DELETE",
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.message ?? "No fue posible eliminar el miembro");
+      }
+
+      return payload;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["members"] });
+      queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
+      setEditingMemberId(null);
+      setDeletingMemberId(null);
+    },
+    onError: () => {
+      setDeletingMemberId(null);
+    },
+  });
+
+  function handleDeleteMember(memberId: string, memberName: string) {
+    const confirmed = window.confirm(`Se eliminara el miembro \"${memberName}\". Esta accion desactiva el perfil. Deseas continuar?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingMemberId(memberId);
+    deleteMember.mutate(memberId);
+  }
 
   async function startEdit(memberId: string) {
     const response = await fetch(`/api/members/${memberId}`);
@@ -365,6 +401,13 @@ export default function MembersPage() {
                 <Link href={`/dashboard/members/${member.id}`}>
                   <Button variant="ghost">Ver medidas</Button>
                 </Link>
+                <Button
+                  variant="destructive"
+                  onClick={() => handleDeleteMember(member.id, member.fullName)}
+                  disabled={deleteMember.isPending && deletingMemberId === member.id}
+                >
+                  {deleteMember.isPending && deletingMemberId === member.id ? "Eliminando..." : "Eliminar"}
+                </Button>
               </div>
 
               {editingMemberId === member.id ? (
@@ -416,6 +459,9 @@ export default function MembersPage() {
 
               {updateMember.isError && editingMemberId === member.id ? (
                 <p className="text-sm text-destructive">{updateMember.error.message}</p>
+              ) : null}
+              {deleteMember.isError && deletingMemberId === member.id ? (
+                <p className="text-sm text-destructive">{deleteMember.error.message}</p>
               ) : null}
             </div>
           ))}
