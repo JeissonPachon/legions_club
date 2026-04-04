@@ -60,7 +60,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         ? "tenant_manually_suspended"
         : "tenant_manually_archived";
 
-  await db.$transaction(async (tx) => {
+  await db.$transaction(async (tx: any) => {
     await tx.tenant.update({
       where: { id: existing.id },
       data: {

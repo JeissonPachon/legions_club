@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   const amountCents = parsed.data.amountCents ?? currentFeeCents;
   const cycle = getTenantBillingDates(tenant.createdAt, new Date());
 
-  await db.$transaction(async (tx) => {
+  await db.$transaction(async (tx: any) => {
     await tx.auditLog.create({
       data: {
         tenantId: tenant.id,

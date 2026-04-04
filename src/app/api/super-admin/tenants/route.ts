@@ -107,7 +107,7 @@ export async function POST(request: Request) {
 
     const passwordHash = await hashPassword(parsed.data.adminPassword);
 
-    const result = await db.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx: any) => {
       const tenant = await tx.tenant.create({
         data: {
           slug: tenantSlug,

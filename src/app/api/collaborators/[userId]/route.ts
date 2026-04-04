@@ -55,7 +55,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ message: "Colaborador no encontrado" }, { status: 404 });
   }
 
-  const updated = await db.$transaction(async (tx) => {
+  const updated = await db.$transaction(async (tx: any) => {
     const next = await tx.user.update({
       where: { id: collaborator.id },
       data: { isActive: parsed.data.isActive },

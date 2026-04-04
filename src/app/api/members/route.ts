@@ -95,7 +95,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Plan no encontrado o inactivo" }, { status: 404 });
   }
 
-  const result = await db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx: any) => {
     // Generar contraseña aleatoria segura
     const plainPassword = randomBytes(8).toString("base64url");
     const passwordHash = await bcrypt.hash(plainPassword, 10);

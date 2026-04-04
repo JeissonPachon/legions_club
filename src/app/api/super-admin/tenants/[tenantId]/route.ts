@@ -65,7 +65,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
   }
 
-  const updated = await db.$transaction(async (tx) => {
+  const updated = await db.$transaction(async (tx: any) => {
     const tenant = await tx.tenant.update({
       where: { id: existing.id },
       data: {
@@ -200,7 +200,7 @@ export async function DELETE(request: Request, context: RouteContext) {
   let replacementTenantId: string | null = null;
 
   try {
-    await db.$transaction(async (tx) => {
+    await db.$transaction(async (tx: any) => {
       if (deletingCurrentTenant) {
         const fallbackTenant = await tx.tenant.upsert({
           where: { slug: "platform-admin" },

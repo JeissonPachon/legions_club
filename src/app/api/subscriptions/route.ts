@@ -97,7 +97,7 @@ export async function POST(request: Request) {
   const startDate = parsed.data.startDate ? new Date(parsed.data.startDate) : new Date();
   const endDate = dayjs(startDate).add(plan.durationDays, "day").toDate();
 
-  const subscription = await db.$transaction(async (tx) => {
+  const subscription = await db.$transaction(async (tx: any) => {
     const createdSubscription = await tx.subscription.create({
       data: {
         tenantId: auth.tenantId,

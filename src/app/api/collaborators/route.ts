@@ -74,7 +74,7 @@ export async function POST(request: Request) {
 
   const passwordHash = await hashPassword(parsed.data.password);
 
-  const collaborator = await db.$transaction(async (tx) => {
+  const collaborator = await db.$transaction(async (tx: any) => {
     const created = await tx.user.create({
       data: {
         tenantId: auth.tenantId,
