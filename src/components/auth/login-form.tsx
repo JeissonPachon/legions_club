@@ -35,6 +35,7 @@ export function LoginForm() {
   const [selectedTenantSlug, setSelectedTenantSlug] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isResendingCode, setIsResendingCode] = useState(false);
 
   const handleCredentials = async () => {
     setError(null);
@@ -110,6 +111,41 @@ export function LoginForm() {
       setError(message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (!challengeId) {
+      setError("No hay challenge activo. Inicia sesion de nuevo.");
+      return;
+    }
+
+    setError(null);
+    setIsResendingCode(true);
+
+    try {
+      const response = await fetch("/api/auth/2fa/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeId }),
+      });
+
+      const payload = await response.json();
+      if (response.status === 429) {
+        const retryAfter = Number(response.headers.get("Retry-After") ?? "0");
+        if (Number.isFinite(retryAfter) && retryAfter > 0) {
+          throw new Error(`Demasiados reenvios. Intenta de nuevo en ${retryAfter} segundos.`);
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.message ?? "No fue posible reenviar el codigo");
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No fue posible reenviar el codigo";
+      setError(message);
+    } finally {
+      setIsResendingCode(false);
     }
   };
 
@@ -229,6 +265,9 @@ export function LoginForm() {
               ) : null}
               <Button className="w-full" disabled={isLoading} onClick={handleVerify}>
                 {isLoading ? "Verificando..." : "Verificar e ingresar"}
+              </Button>
+              <Button className="w-full" type="button" variant="outline" disabled={isResendingCode} onClick={handleResendCode}>
+                {isResendingCode ? "Reenviando..." : "Reenviar codigo"}
               </Button>
             </>
           )}
