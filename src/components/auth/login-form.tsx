@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,11 +31,38 @@ export function LoginForm() {
   const [challengeId, setChallengeId] = useState("");
   const [code, setCode] = useState("");
   const [devCode, setDevCode] = useState<string | undefined>();
+  const [expiresAtIso, setExpiresAtIso] = useState<string | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
   const [selectedTenantSlug, setSelectedTenantSlug] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isResendingCode, setIsResendingCode] = useState(false);
+
+  useEffect(() => {
+    if (step !== "verify" || !expiresAtIso) {
+      setRemainingSeconds(null);
+      return;
+    }
+
+    const updateCountdown = () => {
+      const expiresAtMs = new Date(expiresAtIso).getTime();
+      if (Number.isNaN(expiresAtMs)) {
+        setRemainingSeconds(null);
+        return;
+      }
+      const diffSeconds = Math.floor((expiresAtMs - Date.now()) / 1000);
+      setRemainingSeconds(Math.max(0, diffSeconds));
+    };
+
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [step, expiresAtIso]);
+
+  const isCodeExpired = remainingSeconds !== null && remainingSeconds <= 0;
+  const minutesLeft = remainingSeconds !== null ? Math.floor(remainingSeconds / 60) : 0;
+  const secondsLeft = remainingSeconds !== null ? remainingSeconds % 60 : 0;
 
   const handleCredentials = async () => {
     setError(null);
@@ -73,6 +100,7 @@ export function LoginForm() {
       setSelectedTenantSlug("");
       setChallengeId(payload.challengeId);
       setDevCode(payload.devCode);
+      setExpiresAtIso(typeof payload.expiresAt === "string" ? payload.expiresAt : null);
       setStep("verify");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Fallo el inicio de sesion";
@@ -141,6 +169,8 @@ export function LoginForm() {
       if (!response.ok) {
         throw new Error(payload.message ?? "No fue posible reenviar el codigo");
       }
+
+      setExpiresAtIso(typeof payload.expiresAt === "string" ? payload.expiresAt : null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "No fue posible reenviar el codigo";
       setError(message);
@@ -258,12 +288,19 @@ export function LoginForm() {
                   maxLength={6}
                 />
               </div>
+              {remainingSeconds !== null ? (
+                <p className="text-xs text-muted-foreground">
+                  {isCodeExpired
+                    ? "El codigo vencio. Reenvia uno nuevo."
+                    : `Tu codigo vence en ${String(minutesLeft).padStart(2, "0")}:${String(secondsLeft).padStart(2, "0")}`}
+                </p>
+              ) : null}
               {devCode ? (
                 <p className="rounded-md border p-2 text-xs text-muted-foreground">
                   Codigo de desarrollo: <span className="font-semibold text-foreground">{devCode}</span>
                 </p>
               ) : null}
-              <Button className="w-full" disabled={isLoading} onClick={handleVerify}>
+              <Button className="w-full" disabled={isLoading || isCodeExpired} onClick={handleVerify}>
                 {isLoading ? "Verificando..." : "Verificar e ingresar"}
               </Button>
               <Button className="w-full" type="button" variant="outline" disabled={isResendingCode} onClick={handleResendCode}>
