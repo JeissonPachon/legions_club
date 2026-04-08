@@ -27,7 +27,7 @@ type NavItem = {
 
 const gymNavigation: NavItem[] = [
   { href: "/dashboard/gym", label: "Panel", icon: LayoutDashboard, match: "exact" },
-  { href: "/dashboard/members", label: "Miembros", icon: Users, match: "prefix" },
+  { href: "/dashboard/members", label: "Atletas", icon: Users, match: "prefix" },
   { href: "/dashboard/subscriptions", label: "Suscripciones", icon: WalletCards, match: "prefix" },
   { href: "/dashboard/finance", label: "Finanzas", icon: HandCoins, match: "prefix" },
 ];
