@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { QRCodeCanvas } from "qrcode.react";
 import { ChangePassword } from "@/components/mi-perfil/change-password";
+import { QrShareActions } from "@/components/qr/qr-share-actions";
 
 type PerfilMeasurement = {
   id: string;
@@ -55,6 +56,7 @@ export default async function MiPerfilPage() {
   if (!data) return <div>No se pudo cargar tu información.</div>;
 
   const { member, anthropometrics, subscription } = data;
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(member.id)}`;
 
   return (
     <div className="max-w-2xl mx-auto py-8 space-y-6">
@@ -73,6 +75,7 @@ export default async function MiPerfilPage() {
         <CardContent className="flex flex-col items-center gap-2">
           <QRCodeCanvas value={member.id} size={160} />
           <div className="text-sm text-muted-foreground">Muestra este código para ingresar al gimnasio</div>
+          <QrShareActions qrImageUrl={qrImageUrl} gymName={data.gymName} />
         </CardContent>
       </Card>
 

@@ -88,11 +88,17 @@ curl -X POST http://localhost:3000/api/bootstrap \
 	}'
 ```
 
-Then login at `/auth/login` with `tenantSlug`, email/password, and the 2FA code.
+Then login at `/auth/login` with `tenantSlug` and email/password.
+
+If you want to enforce email 2FA again, set:
+
+```env
+AUTH_REQUIRE_2FA=true
+```
 
 ## MVP modules implemented
 
-- Auth: email/password + email 2FA + server sessions
+- Auth: email/password + server sessions (optional email 2FA via `AUTH_REQUIRE_2FA=false`)
 - Multi-tenant APIs: members, plans, subscriptions, check-ins, dashboard summary
 - UI modules: dashboard, members, plans/settings, subscriptions
 - Security baseline: encrypted member sensitive fields and tenant-scoped queries

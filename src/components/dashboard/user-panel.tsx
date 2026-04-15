@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChangePassword } from "@/components/mi-perfil/change-password";
+import { QrShareActions } from "@/components/qr/qr-share-actions";
 
 type UserPanelPayload = {
   hasMember: boolean;
@@ -82,13 +83,16 @@ export function UserPanel() {
         </CardHeader>
         <CardContent className="flex justify-center">
           {qrImageUrl ? (
-            <Image
-              src={qrImageUrl}
-              alt="QR de asistencia del atleta"
-              width={260}
-              height={260}
-              className="rounded-md border bg-white p-2"
-            />
+            <div className="flex flex-col items-center gap-3">
+              <Image
+                src={qrImageUrl}
+                alt="QR de asistencia del atleta"
+                width={260}
+                height={260}
+                className="rounded-md border bg-white p-2"
+              />
+              <QrShareActions qrImageUrl={qrImageUrl} gymName={query.data?.gymName} />
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground">QR no disponible</p>
           )}

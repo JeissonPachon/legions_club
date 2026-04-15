@@ -6,6 +6,7 @@ const envSchema = z.object({
   DIRECT_URL: z.string().min(1).optional(),
   APP_URL: z.string().url().default("http://localhost:3000"),
   AUTH_JWT_SECRET: z.string().min(32),
+  AUTH_REQUIRE_2FA: z.boolean().default(false),
   AUTH_2FA_TTL_MINUTES: z.coerce.number().int().positive().default(10),
   AUTH_SESSION_DAYS: z.coerce.number().int().positive().default(7),
   AUTH_BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(14).default(12),
@@ -33,12 +34,29 @@ export type AppEnv = z.infer<typeof envSchema>;
 
 const emptyToUndefined = (v: string | undefined) => (v === "" ? undefined : v);
 
+const parseBooleanEnv = (value: string | undefined, defaultValue: boolean) => {
+  if (value === undefined) {
+    return defaultValue;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+
+  return defaultValue;
+};
+
 export const env = envSchema.parse({
   NODE_ENV: process.env.NODE_ENV,
   DATABASE_URL: process.env.DATABASE_URL,
   DIRECT_URL: emptyToUndefined(process.env.DIRECT_URL),
   APP_URL: emptyToUndefined(process.env.APP_URL),
   AUTH_JWT_SECRET: process.env.AUTH_JWT_SECRET,
+  AUTH_REQUIRE_2FA: parseBooleanEnv(process.env.AUTH_REQUIRE_2FA, false),
   AUTH_2FA_TTL_MINUTES: process.env.AUTH_2FA_TTL_MINUTES,
   AUTH_SESSION_DAYS: process.env.AUTH_SESSION_DAYS,
   AUTH_BCRYPT_ROUNDS: process.env.AUTH_BCRYPT_ROUNDS,

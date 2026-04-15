@@ -3,8 +3,11 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { verifyPassword } from "@/lib/auth/password";
 import { generateTwoFactorCode, hashTwoFactorCode } from "@/lib/auth/two-factor";
+import { createSessionToken, hashSessionToken, signSessionJwt } from "@/lib/auth/session";
+import { setAuthCookie } from "@/lib/auth/cookies";
 import { env } from "@/lib/env";
 import { sendTwoFactorEmail } from "@/lib/email/send-two-factor-email";
+import { hashPII } from "@/lib/security/crypto";
 import { checkRateLimit, getRequestIp } from "@/lib/security/rate-limit";
 
 const loginSchema = z.object({
@@ -23,6 +26,8 @@ type LoginTenant = {
 type LoginUser = {
   id: string;
   email: string;
+  role: "owner" | "manager" | "coach" | "athlete";
+  fullName: string;
   passwordHash: string;
   tenantId: string;
   isActive: boolean;
@@ -106,6 +111,8 @@ export async function POST(request: Request) {
       select: {
         id: true,
         email: true,
+        role: true,
+        fullName: true,
         passwordHash: true,
         tenantId: true,
         isActive: true,
@@ -189,6 +196,50 @@ export async function POST(request: Request) {
         },
         { status: 401 },
       );
+    }
+
+    if (!env.AUTH_REQUIRE_2FA) {
+      const rawSessionToken = createSessionToken();
+      const expiresAt = new Date(Date.now() + env.AUTH_SESSION_DAYS * 24 * 60 * 60 * 1000);
+
+      const session = await db.session.create({
+        data: {
+          tenantId: tenant.id,
+          userId: user.id,
+          sessionTokenHash: hashSessionToken(rawSessionToken),
+          ipHash: hashPII(request.headers.get("x-forwarded-for") ?? "local"),
+          userAgent: request.headers.get("user-agent") ?? "unknown",
+          expiresAt,
+        },
+      });
+
+      await db.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+      });
+
+      const jwt = await signSessionJwt({
+        sub: user.id,
+        sid: session.id,
+        tenantId: tenant.id,
+        role: user.role,
+        email: user.email,
+        fullName: user.fullName,
+      });
+
+      const response = NextResponse.json({
+        ok: true,
+        requiresTwoFactor: false,
+        user: {
+          id: user.id,
+          fullName: user.fullName,
+          email: user.email,
+          role: user.role,
+        },
+      });
+
+      setAuthCookie(response, jwt);
+      return response;
     }
 
     const code = generateTwoFactorCode();

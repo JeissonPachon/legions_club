@@ -98,10 +98,15 @@ export function LoginForm() {
 
       setTenantOptions([]);
       setSelectedTenantSlug("");
-      setChallengeId(payload.challengeId);
-      setDevCode(payload.devCode);
-      setExpiresAtIso(typeof payload.expiresAt === "string" ? payload.expiresAt : null);
-      setStep("verify");
+      if (payload.requiresTwoFactor) {
+        setChallengeId(payload.challengeId);
+        setDevCode(payload.devCode);
+        setExpiresAtIso(typeof payload.expiresAt === "string" ? payload.expiresAt : null);
+        setStep("verify");
+      } else {
+        router.push("/dashboard");
+        router.refresh();
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Fallo el inicio de sesion";
       setError(message);
@@ -213,7 +218,7 @@ export function LoginForm() {
             <CardHeader className="space-y-1">
               <CardTitle className="text-2xl font-bold tracking-tight uppercase">Iniciar sesion</CardTitle>
               <CardDescription className="opacity-90">
-                Ingresa tus credenciales. Se enviara un codigo de verificacion a tu correo.
+                Ingresa tus credenciales para continuar.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -270,10 +275,10 @@ export function LoginForm() {
               ) : null}
               <Button className="w-full" disabled={isLoading} onClick={handleCredentials}>
                 {isLoading
-                  ? "Enviando codigo..."
+                  ? "Iniciando sesion..."
                   : tenantOptions.length > 0
                     ? "Continuar con sede"
-                    : "Continuar"}
+                    : "Ingresar"}
               </Button>
             </>
           ) : (
