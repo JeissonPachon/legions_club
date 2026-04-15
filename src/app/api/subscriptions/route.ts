@@ -10,6 +10,12 @@ const createSubscriptionSchema = z.object({
   startDate: z.string().datetime().optional(),
 });
 
+const updateSubscriptionStatusSchema = z.object({
+  subscriptionId: z.string().uuid(),
+  isActive: z.boolean(),
+  reason: z.string().min(3).max(220).optional(),
+});
+
 const subscriptionStatusSchema = z.enum(["active", "paused", "canceled", "expired"]);
 
 export async function GET(request: Request) {
@@ -140,4 +146,96 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({ subscription }, { status: 201 });
+}
+
+export async function PATCH(request: Request) {
+  const auth = await requireGymManagementApi();
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const body = await request.json().catch(() => null);
+  const parsed = updateSubscriptionStatusSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ message: "Invalid status update payload" }, { status: 400 });
+  }
+
+  const subscription = await db.subscription.findFirst({
+    where: {
+      id: parsed.data.subscriptionId,
+      tenantId: auth.tenantId,
+    },
+    select: {
+      id: true,
+      status: true,
+      endDate: true,
+      canceledAt: true,
+      cancelReason: true,
+      memberId: true,
+      planId: true,
+    },
+  });
+
+  if (!subscription) {
+    return NextResponse.json({ message: "Subscription not found" }, { status: 404 });
+  }
+
+  const targetStatus = parsed.data.isActive ? "active" : "canceled";
+  if (subscription.status === targetStatus) {
+    return NextResponse.json({ ok: true, subscription });
+  }
+
+  if (parsed.data.isActive && subscription.endDate < new Date()) {
+    return NextResponse.json(
+      { message: "No se puede reactivar una suscripcion vencida. Crea una nueva suscripcion." },
+      { status: 409 },
+    );
+  }
+
+  const cancelReason = parsed.data.reason?.trim() || "Cambio manual desde panel de suscripciones";
+
+  const updated = await db.$transaction(async (tx: any) => {
+    const next = await tx.subscription.update({
+      where: { id: subscription.id },
+      data: parsed.data.isActive
+        ? {
+            status: "active",
+            canceledAt: null,
+            cancelReason: null,
+          }
+        : {
+            status: "canceled",
+            canceledAt: new Date(),
+            cancelReason,
+          },
+      select: {
+        id: true,
+        status: true,
+        canceledAt: true,
+        cancelReason: true,
+        endDate: true,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        tenantId: auth.tenantId,
+        actorUserId: auth.userId,
+        action: "subscription_status_updated",
+        entityType: "subscription",
+        entityId: subscription.id,
+        metadataJson: {
+          previousStatus: subscription.status,
+          nextStatus: next.status,
+          reason: cancelReason,
+          memberId: subscription.memberId,
+          planId: subscription.planId,
+        },
+      },
+    });
+
+    return next;
+  });
+
+  return NextResponse.json({ ok: true, subscription: updated });
 }

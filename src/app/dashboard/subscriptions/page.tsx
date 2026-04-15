@@ -2,11 +2,13 @@
 
 import dayjs from "dayjs";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useGymManagementPageGuard } from "@/components/dashboard/use-gym-management-page-guard";
+import { QrShareActions } from "@/components/qr/qr-share-actions";
 
 type Subscription = {
   id: string;
@@ -14,7 +16,7 @@ type Subscription = {
   sessionsRemaining: number;
   startDate: string;
   endDate: string;
-  member: { fullName: string; documentLast4: string };
+  member: { id: string; fullName: string; documentLast4: string };
   plan: { name: string };
 };
 
@@ -35,6 +37,7 @@ async function fetchSubscriptions(month: string, status: StatusFilter): Promise<
 
 export default function SubscriptionsPage() {
   const { isCheckingAccess, error } = useGymManagementPageGuard();
+  const queryClient = useQueryClient();
   const [selectedMonth, setSelectedMonth] = useState(dayjs().format("YYYY-MM"));
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>("all");
 
@@ -51,6 +54,35 @@ export default function SubscriptionsPage() {
   const subscriptionsQuery = useQuery({
     queryKey: ["subscriptions", selectedMonth, selectedStatus],
     queryFn: () => fetchSubscriptions(selectedMonth, selectedStatus),
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ subscriptionId, isActive }: { subscriptionId: string; isActive: boolean }) => {
+      const response = await fetch("/api/subscriptions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subscriptionId,
+          isActive,
+          reason: isActive
+            ? "Reactivacion manual desde panel de suscripciones"
+            : "Desactivacion manual para control administrativo",
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.message ?? "No fue posible actualizar el estado de la suscripcion");
+      }
+
+      return payload;
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["subscriptions"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] }),
+      ]);
+    },
   });
 
   const selectedMonthLabel = dayjs(`${selectedMonth}-01`).format("MMMM YYYY");
@@ -103,7 +135,7 @@ export default function SubscriptionsPage() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            El plan se aplica en el proceso de registro del miembro. Esta vista es solo para consulta y seguimiento.
+            Puedes activar o desactivar suscripciones para mantener datos operativos correctos en reportes y paneles.
           </p>
         </CardContent>
       </Card>
@@ -128,9 +160,33 @@ export default function SubscriptionsPage() {
                   Inicio {dayjs(item.startDate).format("DD/MM/YYYY")} · Fin {dayjs(item.endDate).format("DD/MM/YYYY")}
                 </p>
               </div>
-              <span className="text-xs text-muted-foreground">{item.status}</span>
+              <div className="flex flex-col items-end gap-2">
+                <span className="text-xs text-muted-foreground">{item.status}</span>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={item.status === "active" ? "destructive" : "default"}
+                    disabled={updateStatusMutation.isPending}
+                    onClick={() =>
+                      updateStatusMutation.mutate({
+                        subscriptionId: item.id,
+                        isActive: item.status !== "active",
+                      })
+                    }
+                  >
+                    {item.status === "active" ? "Desactivar" : "Activar"}
+                  </Button>
+                  <QrShareActions
+                    qrImageUrl={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(item.member.id)}`}
+                  />
+                </div>
+              </div>
             </div>
           ))}
+          {updateStatusMutation.isError ? (
+            <p className="text-sm text-destructive">{updateStatusMutation.error.message}</p>
+          ) : null}
         </CardContent>
       </Card>
     </div>
