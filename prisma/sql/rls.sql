@@ -9,66 +9,100 @@ as $$
   select nullif(current_setting('app.tenant_id', true), '')::uuid
 $$;
 
-alter table tenants enable row level security;
-alter table users enable row level security;
-alter table sessions enable row level security;
-alter table two_factor_challenges enable row level security;
-alter table members enable row level security;
-alter table member_sensitive enable row level security;
-alter table plans enable row level security;
-alter table subscriptions enable row level security;
-alter table attendance_events enable row level security;
-alter table audit_logs enable row level security;
-alter table email_outbox enable row level security;
+-- Explicit RLS hardening for the 18 Supabase linted tables.
+do $$
+declare
+  t text;
+begin
+  foreach t in array ARRAY[
+    'gym_members',
+    'gym_subscriptions',
+    'gym_plans',
+    'gym_session_logs',
+    'gym_admins',
+    'sessions',
+    'two_factor_challenges',
+    'members',
+    'plans',
+    'subscriptions',
+    'attendance_events',
+    'audit_logs',
+    'email_outbox',
+    'tenants',
+    'member_sensitive',
+    'users',
+    'anthropometrics',
+    '_prisma_migrations'
+  ]
+  loop
+    if to_regclass(format('public.%I', t)) is not null then
+      execute format('alter table public.%I enable row level security', t);
+      execute format('alter table public.%I force row level security', t);
+    else
+      raise notice 'Skipping missing table public.%', t;
+    end if;
+  end loop;
+end
+$$;
 
+drop policy if exists tenant_isolation_users on users;
 create policy tenant_isolation_users on users
-  using (tenant_id = app.current_tenant_id())
-  with check (tenant_id = app.current_tenant_id());
+  using ("tenantId" = app.current_tenant_id())
+  with check ("tenantId" = app.current_tenant_id());
 
+drop policy if exists tenant_isolation_sessions on sessions;
 create policy tenant_isolation_sessions on sessions
-  using (tenant_id = app.current_tenant_id())
-  with check (tenant_id = app.current_tenant_id());
+  using ("tenantId" = app.current_tenant_id())
+  with check ("tenantId" = app.current_tenant_id());
 
+drop policy if exists tenant_isolation_two_factor on two_factor_challenges;
 create policy tenant_isolation_two_factor on two_factor_challenges
-  using (tenant_id = app.current_tenant_id())
-  with check (tenant_id = app.current_tenant_id());
+  using ("tenantId" = app.current_tenant_id())
+  with check ("tenantId" = app.current_tenant_id());
 
+drop policy if exists tenant_isolation_members on members;
 create policy tenant_isolation_members on members
-  using (tenant_id = app.current_tenant_id())
-  with check (tenant_id = app.current_tenant_id());
+  using ("tenantId" = app.current_tenant_id())
+  with check ("tenantId" = app.current_tenant_id());
 
+drop policy if exists tenant_isolation_plans on plans;
 create policy tenant_isolation_plans on plans
-  using (tenant_id = app.current_tenant_id())
-  with check (tenant_id = app.current_tenant_id());
+  using ("tenantId" = app.current_tenant_id())
+  with check ("tenantId" = app.current_tenant_id());
 
+drop policy if exists tenant_isolation_subscriptions on subscriptions;
 create policy tenant_isolation_subscriptions on subscriptions
-  using (tenant_id = app.current_tenant_id())
-  with check (tenant_id = app.current_tenant_id());
+  using ("tenantId" = app.current_tenant_id())
+  with check ("tenantId" = app.current_tenant_id());
 
+drop policy if exists tenant_isolation_attendance on attendance_events;
 create policy tenant_isolation_attendance on attendance_events
-  using (tenant_id = app.current_tenant_id())
-  with check (tenant_id = app.current_tenant_id());
+  using ("tenantId" = app.current_tenant_id())
+  with check ("tenantId" = app.current_tenant_id());
 
+drop policy if exists tenant_isolation_audits on audit_logs;
 create policy tenant_isolation_audits on audit_logs
-  using (tenant_id = app.current_tenant_id())
-  with check (tenant_id = app.current_tenant_id());
+  using ("tenantId" = app.current_tenant_id())
+  with check ("tenantId" = app.current_tenant_id());
 
+drop policy if exists tenant_isolation_outbox on email_outbox;
 create policy tenant_isolation_outbox on email_outbox
-  using (tenant_id = app.current_tenant_id())
-  with check (tenant_id = app.current_tenant_id());
+  using ("tenantId" = app.current_tenant_id())
+  with check ("tenantId" = app.current_tenant_id());
 
+drop policy if exists tenant_isolation_member_sensitive on member_sensitive;
 create policy tenant_isolation_member_sensitive on member_sensitive
   using (
     exists (
       select 1 from members
-      where members.id = member_sensitive.member_id
-      and members.tenant_id = app.current_tenant_id()
+      where members.id = member_sensitive."memberId"
+      and members."tenantId" = app.current_tenant_id()
     )
   )
   with check (
     exists (
       select 1 from members
-      where members.id = member_sensitive.member_id
-      and members.tenant_id = app.current_tenant_id()
+      where members.id = member_sensitive."memberId"
+      and members."tenantId" = app.current_tenant_id()
     )
   );
